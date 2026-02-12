@@ -27,7 +27,15 @@ export async function PUT(
     );
   }
 
-  const body = (await request.json()) as ReframeUpdateBody;
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- validated below
+  const rawBody = await request.json();
+  if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
+    return NextResponse.json(
+      { error: "Invalid request body", code: "bad_request" },
+      { status: 400 },
+    );
+  }
+  const body = rawBody as ReframeUpdateBody;
 
   // Validate evidence tier if provided
   const newTier = body.evidenceTier ?? existing.evidenceTier;

@@ -3,8 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const limit = parseInt(searchParams.get("limit") ?? "20", 10);
-  const offset = parseInt(searchParams.get("offset") ?? "0", 10);
+  const limitParam = parseInt(searchParams.get("limit") ?? "20", 10);
+  const offsetParam = parseInt(searchParams.get("offset") ?? "0", 10);
+  const limit = isNaN(limitParam) ? 20 : Math.max(1, Math.min(limitParam, 100));
+  const offset = isNaN(offsetParam) ? 0 : Math.max(0, offsetParam);
 
   const where = {
     type: "SIGNAL_ALERT" as const,

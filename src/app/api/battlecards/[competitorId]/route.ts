@@ -46,6 +46,7 @@ export async function GET(
       tier: battlecard.competitor.tier,
     },
     whenTheyComeUp: battlecard.whenTheyComeUp,
+    // Safe casts: Prisma Json fields validated at write time (seed.ts / battlecard generator)
     theirPitch: battlecard.theirPitch as string[],
     weaknesses: battlecard.weaknesses as unknown as BattlecardWeakness[],
     reframes: battlecard.competitor.reframes.map((r) => ({
@@ -56,7 +57,7 @@ export async function GET(
       evidenceTier: r.evidenceTier,
       sources: r.sourceItems.map((s) => s.sourceUrl),
     })),
-    openQuestions: battlecard.openQuestions as string[],
+    openQuestions: battlecard.openQuestions as string[], // Safe cast: validated at write time
     lastUpdated: battlecard.updatedAt.toISOString(),
   });
 }

@@ -10,8 +10,10 @@ export async function GET(request: NextRequest) {
   const simulated = searchParams.get("simulated");
   const from = searchParams.get("from");
   const to = searchParams.get("to");
-  const limit = parseInt(searchParams.get("limit") ?? "50", 10);
-  const offset = parseInt(searchParams.get("offset") ?? "0", 10);
+  const limitParam = parseInt(searchParams.get("limit") ?? "50", 10);
+  const offsetParam = parseInt(searchParams.get("offset") ?? "0", 10);
+  const limit = isNaN(limitParam) ? 50 : Math.max(1, Math.min(limitParam, 100));
+  const offset = isNaN(offsetParam) ? 0 : Math.max(0, offsetParam);
 
   const where: Record<string, unknown> = {};
 
@@ -23,8 +25,20 @@ export async function GET(request: NextRequest) {
 
   if (from ?? to) {
     const detectedAt: Record<string, Date> = {};
-    if (from) detectedAt.gte = new Date(from);
-    if (to) detectedAt.lte = new Date(to);
+    if (from) {
+      const fromDate = new Date(from);
+      if (isNaN(fromDate.getTime())) {
+        return NextResponse.json({ error: "Invalid 'from' date", code: "bad_request" }, { status: 400 });
+      }
+      detectedAt.gte = fromDate;
+    }
+    if (to) {
+      const toDate = new Date(to);
+      if (isNaN(toDate.getTime())) {
+        return NextResponse.json({ error: "Invalid 'to' date", code: "bad_request" }, { status: 400 });
+      }
+      detectedAt.lte = toDate;
+    }
     where.detectedAt = detectedAt;
   }
 
