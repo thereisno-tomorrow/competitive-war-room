@@ -76,7 +76,6 @@ export async function generateWeeklyPulse(
     data: {
       type: "WEEKLY_PULSE",
       headline,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Prisma Json field accepts parsed JSON
       content: JSON.parse(JSON.stringify(content)),
       wordCount,
       validationStatus,

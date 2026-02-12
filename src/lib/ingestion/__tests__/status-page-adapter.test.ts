@@ -26,17 +26,6 @@ const mockHtmlHealthy = `
 </html>
 `;
 
-const mockHtmlDegraded = `
-<html>
-  <head><title>Status Page</title></head>
-  <body>
-    <h1>System Status</h1>
-    <p>Degraded performance on API endpoints.</p>
-    <p>Investigating an incident affecting payments.</p>
-  </body>
-</html>
-`;
-
 describe("StatusPageAdapter", () => {
   let adapter: StatusPageAdapter;
 

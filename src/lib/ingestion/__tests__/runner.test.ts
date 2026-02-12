@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { SourceType } from "@/generated/prisma/client";
 import type {
   IngestionAdapter,
-  RawContent,
   DetectedChange,
 } from "../adapters/base";
 

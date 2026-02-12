@@ -27,7 +27,6 @@ export async function PUT(
     );
   }
 
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- validated below
   const rawBody = await request.json();
   if (typeof rawBody !== "object" || rawBody === null || Array.isArray(rawBody)) {
     return NextResponse.json(

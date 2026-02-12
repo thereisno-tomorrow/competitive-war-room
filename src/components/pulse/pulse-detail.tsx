@@ -13,7 +13,6 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 
 interface PulseDetailProps {
@@ -316,8 +315,6 @@ function MonthlyPulseDetail({ content }: { content: MonthlyPulseContent }) {
 export function PulseDetail({
   type,
   content,
-  headline,
-  publishedAt,
 }: PulseDetailProps) {
   return (
     <div>

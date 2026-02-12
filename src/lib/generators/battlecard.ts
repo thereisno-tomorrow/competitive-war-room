@@ -100,7 +100,6 @@ OUTPUT FORMAT: Respond with ONLY valid JSON:
   await prisma.battlecard.update({
     where: { competitorId },
     data: {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Prisma Json field accepts parsed JSON
       weaknesses: JSON.parse(JSON.stringify(validatedWeaknesses)),
     },
   });

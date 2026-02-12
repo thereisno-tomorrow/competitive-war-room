@@ -100,7 +100,6 @@ export async function generateSignalAlert(
     data: {
       type: "SIGNAL_ALERT",
       headline,
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment -- Prisma Json field accepts parsed JSON
       content: JSON.parse(JSON.stringify(content)),
       wordCount,
       validationStatus,

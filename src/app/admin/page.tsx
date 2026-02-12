@@ -4,10 +4,10 @@ import { useState, useCallback } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useBattlecards, useBattlecard } from "@/lib/hooks/use-battlecards";
 import { EvidenceTierBadge } from "@/components/shared/evidence-tier-badge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
-import type { BattlecardSummary, BattlecardDetail } from "@/types";
+import type { BattlecardSummary } from "@/types";
 import type { EvidenceTier } from "@/generated/prisma/client";
 
 // === Types ===

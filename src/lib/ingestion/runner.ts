@@ -1,6 +1,6 @@
 import type { SourceType } from "@/generated/prisma/client";
 import { prisma } from "@/lib/db";
-import type { IngestionAdapter, DetectedChange } from "./adapters/base";
+import type { IngestionAdapter } from "./adapters/base";
 import { hashContent } from "./diff-engine";
 
 interface IngestionResult {
