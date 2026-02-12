@@ -39,12 +39,15 @@ export async function generateSignalAlert(
 
   if (existingAlerts.length > 0) {
     const existing = existingAlerts[0];
+    // TypeScript strict index guard — length > 0 guarantees this exists
     if (!existing) throw new Error("Unexpected empty existing alerts array");
     return {
       id: existing.id,
       headline: existing.headline,
+      // Prisma Json field → typed content; structure validated at generation time
       content: existing.content as unknown as SignalAlertContent,
       wordCount: existing.wordCount,
+      // Prisma ValidationStatus enum is structurally compatible with our union
       validationStatus: existing.validationStatus as GenerationResult["validationStatus"],
       deduplicated: true,
     };
