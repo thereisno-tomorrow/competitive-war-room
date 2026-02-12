@@ -1,11 +1,12 @@
 import { describe, it, expect } from "vitest";
 import {
   validateWeeklyPulse,
+  validateMonthlyPulse,
   validateSignalAlert,
   validateBattlecardReframe,
   countWords,
 } from "../validators";
-import type { WeeklyPulseContent, SignalAlertContent } from "@/types";
+import type { WeeklyPulseContent, MonthlyPulseContent, SignalAlertContent } from "@/types";
 
 describe("validators", () => {
   describe("countWords", () => {
@@ -57,6 +58,53 @@ describe("validators", () => {
       // @ts-expect-error -- testing invalid input
       invalid.sections.topSignals[0].evidenceTier = undefined;
       const result = validateWeeklyPulse(invalid, 500);
+      expect(result.valid).toBe(false);
+    });
+  });
+
+  describe("validateMonthlyPulse", () => {
+    const validMonthly: MonthlyPulseContent = {
+      sections: {
+        categoryHealth: "Treasury management category remains competitive.",
+        tier1Shifts: [{
+          competitor: "Kyriba",
+          narrative: "Expanding AI treasury capabilities",
+          evidenceTier: "CONFIRMED",
+        }],
+        tier2Watch: [{
+          competitor: "GTreasury",
+          signal: "Launched mid-market Essentials tier",
+        }],
+        positioningConfidence: [{
+          claimId: "c1",
+          claimText: "Mid-market treasury+payments",
+          status: "HOLDING",
+          evidenceForCount: 3,
+          evidenceAgainstCount: 1,
+          assessment: "Claim holds despite GTreasury entry.",
+        }],
+        contentImplications: ["Update AI messaging to counter HighRadius claims"],
+      },
+    };
+
+    it("passes valid monthly pulse", () => {
+      const result = validateMonthlyPulse(validMonthly, 500);
+      expect(result.valid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it("rejects monthly pulse without positioning confidence (Finmo specificity)", () => {
+      const invalid = structuredClone(validMonthly);
+      invalid.sections.positioningConfidence = [];
+      const result = validateMonthlyPulse(invalid, 500);
+      expect(result.valid).toBe(false);
+      expect(result.errors.some((e) => e.includes("Finmo specificity"))).toBe(true);
+    });
+
+    it("rejects monthly pulse without content implications", () => {
+      const invalid = structuredClone(validMonthly);
+      invalid.sections.contentImplications = [];
+      const result = validateMonthlyPulse(invalid, 500);
       expect(result.valid).toBe(false);
     });
   });
