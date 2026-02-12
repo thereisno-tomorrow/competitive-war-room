@@ -8,6 +8,7 @@ export function useLatestPulse() {
     queryKey: ["pulse", "latest"],
     queryFn: async () => {
       const res = await fetch("/api/pulse/latest");
+      if (res.status === 404) return null;
       if (!res.ok) throw new Error("Failed to fetch latest pulse");
       return res.json();
     },
