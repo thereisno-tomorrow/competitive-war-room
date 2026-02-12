@@ -37,6 +37,11 @@ export const SOURCE_CATEGORIES: Record<SourceType, SourceCategory> = {
 export const INGESTION = {
   /** State sources with null lastContentHash skip LLM classification (baseline only) */
   SKIP_FIRST_RUN_FOR_STATE_SOURCES: true,
+  /** On first run, RSS feeds may contain 50-100 backlog articles.
+   *  Cap to the N most recent to avoid timeout and excessive LLM calls. */
+  MAX_ITEMS_ON_FIRST_RUN: 15,
+  /** Skip RSS articles older than this many days on first run */
+  MAX_ARTICLE_AGE_DAYS: 14,
 } as const;
 
 // ---------------------------------------------------------------------------
