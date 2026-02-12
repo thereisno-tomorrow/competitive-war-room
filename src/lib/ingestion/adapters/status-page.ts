@@ -18,7 +18,7 @@ export class StatusPageAdapter implements IngestionAdapter {
   async fetch(source: DataSource): Promise<RawContent> {
     const response = await fetch(source.url, {
       headers: { "User-Agent": "FinmoCompetitiveIntel/1.0" },
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {

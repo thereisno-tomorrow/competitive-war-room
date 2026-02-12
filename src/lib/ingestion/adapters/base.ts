@@ -13,6 +13,7 @@ export interface DetectedChange {
   content: string;
   url: string;
   summary: string;
+  publishedAt?: string;
 }
 
 export interface IngestionAdapter {

@@ -92,22 +92,23 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 2. Weekly pulse on Mondays (SGT)
+  // 2. Weekly pulse on Mondays (SGT) — or forced via ?force=true
   const sgtNow = getSGTDate();
   const dayOfWeek = sgtNow.getDay();
+  const forceGenerate = new URL(request.url).searchParams.get("force") === "true";
 
-  if (dayOfWeek === SCHEDULE.WEEKLY_PULSE_DAY) {
-    const alreadyDone = await alreadyGeneratedToday("WEEKLY_PULSE");
+  if (forceGenerate || dayOfWeek === SCHEDULE.WEEKLY_PULSE_DAY) {
+    const alreadyDone = !forceGenerate && await alreadyGeneratedToday("WEEKLY_PULSE");
     if (!alreadyDone) {
       const weekly = await generateWeeklyPulse(llm);
       result.weeklyPulse = { id: weekly.id, headline: weekly.headline };
     }
   }
 
-  // 3. Monthly pulse on 1st-5th of month (SGT)
+  // 3. Monthly pulse on 1st-5th of month (SGT) — or forced
   const dayOfMonth = sgtNow.getDate();
-  if (dayOfMonth >= 1 && dayOfMonth <= SCHEDULE.MONTHLY_PULSE_MAX_BUSINESS_DAY) {
-    const alreadyDone = await alreadyGeneratedToday("MONTHLY_PULSE");
+  if (forceGenerate || (dayOfMonth >= 1 && dayOfMonth <= SCHEDULE.MONTHLY_PULSE_MAX_BUSINESS_DAY)) {
+    const alreadyDone = !forceGenerate && await alreadyGeneratedToday("MONTHLY_PULSE");
     if (!alreadyDone) {
       const monthly = await generateMonthlyPulse(llm);
       result.monthlyPulse = { id: monthly.id, headline: monthly.headline };

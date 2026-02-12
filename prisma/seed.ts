@@ -105,8 +105,8 @@ async function main() {
     },
     {
       competitorId: kyriba.id,
-      type: SourceType.PRESS_RSS,
-      url: "https://www.kyriba.com/company/newsroom/",
+      type: SourceType.WEBSITE,
+      url: "https://www.kyriba.com/resources/",
       cadence: SourceCadence.DAILY,
     },
     {
@@ -130,7 +130,7 @@ async function main() {
     },
     {
       competitorId: airwallex.id,
-      type: SourceType.PRESS_RSS,
+      type: SourceType.WEBSITE,
       url: "https://www.airwallex.com/newsroom",
       cadence: SourceCadence.DAILY,
     },
@@ -156,7 +156,7 @@ async function main() {
     {
       competitorId: trovata.id,
       type: SourceType.PRESS_RSS,
-      url: "https://trovata.io/press/",
+      url: "https://trovata.io/feed/",
       cadence: SourceCadence.DAILY,
     },
     // Nium - Tier 2
@@ -200,7 +200,7 @@ async function main() {
     },
     {
       competitorId: gtreasury.id,
-      type: SourceType.PRESS_RSS,
+      type: SourceType.WEBSITE,
       url: "https://www.gtreasury.com/company/press",
       cadence: SourceCadence.DAILY,
     },

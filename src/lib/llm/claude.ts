@@ -55,14 +55,34 @@ export class ClaudeProvider implements LLMProvider {
     return extractText(response.content).trim();
   }
 
-  async generateStructured<T>(prompt: string, context: Record<string, unknown>): Promise<T> {
+  async classifyStructured<T>(prompt: string): Promise<T> {
+    const response = await this.client.messages.create({
+      model: HAIKU_MODEL,
+      max_tokens: 1024,
+      messages: [
+        {
+          role: "user",
+          content: `${prompt}\n\nIMPORTANT: Respond with ONLY valid JSON. No markdown, no explanation.`,
+        },
+      ],
+    });
+
+    const text = extractText(response.content, "{}");
+    const cleaned = text
+      .replace(/^```(?:json)?\s*\n?/m, "")
+      .replace(/\n?```\s*$/m, "")
+      .trim();
+    return JSON.parse(cleaned) as T;
+  }
+
+  async generateStructured<T>(prompt: string, context: Record<string, unknown>, options?: { fast?: boolean }): Promise<T> {
     const contextStr = Object.entries(context)
       .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
       .join("\n");
 
     const response = await this.client.messages.create({
-      model: SONNET_MODEL,
-      max_tokens: 8192,
+      model: options?.fast ? HAIKU_MODEL : SONNET_MODEL,
+      max_tokens: options?.fast ? 2048 : 8192,
       messages: [
         {
           role: "user",

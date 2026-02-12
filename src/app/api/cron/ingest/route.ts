@@ -6,6 +6,7 @@ import { WebsiteAdapter } from "@/lib/ingestion/adapters/website";
 import { ChangelogAdapter } from "@/lib/ingestion/adapters/changelog";
 import { RssAdapter } from "@/lib/ingestion/adapters/rss";
 import { StatusPageAdapter } from "@/lib/ingestion/adapters/status-page";
+import { ClaudeProvider } from "@/lib/llm/claude";
 
 function validateCronSecret(request: NextRequest): boolean {
   const authHeader = request.headers.get("authorization");
@@ -29,7 +30,8 @@ export async function POST(request: NextRequest) {
     ["STATUS_PAGE", new StatusPageAdapter()],
   ]);
 
-  const runner = new IngestionRunner(adapters);
+  const llm = new ClaudeProvider();
+  const runner = new IngestionRunner(adapters, llm);
   const result = await runner.run();
 
   return NextResponse.json({

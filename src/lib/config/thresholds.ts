@@ -1,3 +1,48 @@
+import type { SourceType } from "@/generated/prisma/client";
+
+// ---------------------------------------------------------------------------
+// Ingestion guardrails
+// ---------------------------------------------------------------------------
+
+/**
+ * Source categories determine how the ingestion pipeline handles each source type.
+ *
+ * EVENT: Each scraped item IS an intelligence signal (RSS articles with per-item parsing).
+ *        First-run behavior: process items normally — they represent real discrete events.
+ *
+ * STATE: The page is a snapshot; intelligence is in the DELTA between snapshots.
+ *        First-run behavior: baseline only — store hash, produce zero IntelligenceItems.
+ */
+export type SourceCategory = "EVENT" | "STATE";
+
+export const SOURCE_CATEGORIES: Record<SourceType, SourceCategory> = {
+  // Event sources — adapter yields discrete per-item entries
+  PRESS_RSS: "EVENT",
+
+  // State sources — intelligence is in the change, not the snapshot
+  // CHANGELOG uses hash-based detection on full page blobs (same as WEBSITE),
+  // so it needs baseline handling to avoid hallucinating from historical entries.
+  CHANGELOG: "STATE",
+  WEBSITE: "STATE",
+  STATUS_PAGE: "STATE",
+
+  // Simulated/future types default to STATE (safe default = no hallucination)
+  REVIEW: "STATE",
+  JOB_POSTING: "STATE",
+  SEO: "STATE",
+  LINKEDIN: "STATE",
+  REGULATORY: "STATE",
+} as const;
+
+export const INGESTION = {
+  /** State sources with null lastContentHash skip LLM classification (baseline only) */
+  SKIP_FIRST_RUN_FOR_STATE_SOURCES: true,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Alert thresholds
+// ---------------------------------------------------------------------------
+
 export const ALERT_THRESHOLDS = {
   /** Any of these conditions being true triggers a Signal Alert */
   tier1CompetitorInvolved: true,
@@ -9,9 +54,9 @@ export const ALERT_THRESHOLDS = {
 } as const;
 
 export const OUTPUT_LIMITS = {
-  WEEKLY_PULSE_MAX_WORDS: 500,
-  MONTHLY_PULSE_MAX_WORDS: 1000,
-  SIGNAL_ALERT_MAX_WORDS: 500,
+  WEEKLY_PULSE_MAX_WORDS: 800,
+  MONTHLY_PULSE_MAX_WORDS: 1500,
+  SIGNAL_ALERT_MAX_WORDS: 700,
   MAX_REGENERATION_ATTEMPTS: 3,
   MAX_ALERTS_PER_WEEK: 3,
 } as const;

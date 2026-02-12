@@ -78,6 +78,7 @@ vi.mock("@/lib/db", () => ({
 const mockLLM = {
   synthesize: vi.fn(),
   classify: vi.fn(),
+  classifyStructured: vi.fn(),
   generateStructured: vi
     .fn()
     .mockResolvedValue(validContent),

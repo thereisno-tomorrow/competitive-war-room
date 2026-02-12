@@ -68,7 +68,7 @@ export async function generateSignalAlert(
 
   while (attempts < OUTPUT_LIMITS.MAX_REGENERATION_ATTEMPTS) {
     attempts++;
-    content = await llm.generateStructured<SignalAlertContent>(prompt, {});
+    content = await llm.generateStructured<SignalAlertContent>(prompt, {}, { fast: true });
 
     const validation = validateSignalAlert(
       content,

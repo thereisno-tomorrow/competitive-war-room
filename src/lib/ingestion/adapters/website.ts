@@ -1,7 +1,7 @@
 import type { SourceType } from "@/generated/prisma/client";
 import type { DataSource } from "@/generated/prisma/client";
 import type { IngestionAdapter, RawContent, DetectedChange } from "./base";
-import { extractTextContent, hasContentChanged } from "../diff-engine";
+import { extractTextWithLinks, hasContentChanged } from "../diff-engine";
 
 export class WebsiteAdapter implements IngestionAdapter {
   readonly sourceType: SourceType = "WEBSITE";
@@ -9,7 +9,7 @@ export class WebsiteAdapter implements IngestionAdapter {
   async fetch(source: DataSource): Promise<RawContent> {
     const response = await fetch(source.url, {
       headers: { "User-Agent": "FinmoCompetitiveIntel/1.0" },
-      signal: AbortSignal.timeout(30_000),
+      signal: AbortSignal.timeout(15_000),
     });
 
     if (!response.ok) {
@@ -19,7 +19,7 @@ export class WebsiteAdapter implements IngestionAdapter {
     }
 
     const html = await response.text();
-    const textContent = extractTextContent(html);
+    const textContent = extractTextWithLinks(html);
 
     return {
       content: textContent,

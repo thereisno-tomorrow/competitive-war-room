@@ -40,9 +40,9 @@ describe("RssAdapter", () => {
     it("concatenates RSS items into content", async () => {
       const mockFeed = {
         items: [
-          { title: "Article One", contentSnippet: "First article summary" },
-          { title: "Article Two", contentSnippet: "Second article summary" },
-          { title: "No Snippet Item", contentSnippet: undefined },
+          { title: "Article One", contentSnippet: "First article summary", link: "https://example.com/1", pubDate: "2026-01-15" },
+          { title: "Article Two", contentSnippet: "Second article summary", link: "https://example.com/2", pubDate: "2026-01-16" },
+          { title: "No Snippet Item", contentSnippet: undefined, link: "https://example.com/3" },
         ],
       };
       vi.mocked(Parser.prototype.parseURL).mockResolvedValue(
@@ -76,52 +76,120 @@ describe("RssAdapter", () => {
   });
 
   describe("detectChanges", () => {
-    it("returns changes when previous hash exists and content differs", async () => {
-      const current = {
-        content: "Article One\nSummary one\n\nArticle Two\nSummary two",
-        url: "https://example.com/feed.xml",
-        fetchedAt: new Date(),
+    it("returns per-item changes when content differs from previous hash", async () => {
+      const mockFeed = {
+        items: [
+          { title: "Article One", contentSnippet: "Summary one", link: "https://example.com/article-1", pubDate: "2026-02-01T10:00:00Z" },
+          { title: "Article Two", contentSnippet: "Summary two", link: "https://example.com/article-2", pubDate: "2026-02-02T10:00:00Z" },
+        ],
       };
+      vi.mocked(Parser.prototype.parseURL).mockResolvedValue(
+        mockFeed as ReturnType<Parser["parseURL"]> extends Promise<infer T>
+          ? T
+          : never,
+      );
+
+      const raw = await adapter.fetch(mockDataSource);
       const previousHash = hashContent("old feed content");
+      const changes = await adapter.detectChanges(raw, previousHash);
 
-      const changes = await adapter.detectChanges(current, previousHash);
-
-      expect(changes).toHaveLength(1);
+      expect(changes).toHaveLength(2);
       expect(changes[0]).toEqual({
         competitorId: "",
         sourceId: "",
-        changeType: "rss_new_items",
-        content: current.content,
-        url: "https://example.com/feed.xml",
-        summary: "New RSS items detected at https://example.com/feed.xml",
+        changeType: "rss_new_item",
+        content: "Article One\nSummary one",
+        url: "https://example.com/article-1",
+        summary: "Article One",
+        publishedAt: "2026-02-01T10:00:00Z",
+      });
+      expect(changes[1]).toEqual({
+        competitorId: "",
+        sourceId: "",
+        changeType: "rss_new_item",
+        content: "Article Two\nSummary two",
+        url: "https://example.com/article-2",
+        summary: "Article Two",
+        publishedAt: "2026-02-02T10:00:00Z",
       });
     });
 
     it("returns changes when previousHash is null (first fetch)", async () => {
-      const current = {
-        content: "some feed content",
-        url: "https://example.com/feed.xml",
-        fetchedAt: new Date(),
+      const mockFeed = {
+        items: [
+          { title: "First Article", contentSnippet: "Content", link: "https://example.com/first" },
+        ],
       };
+      vi.mocked(Parser.prototype.parseURL).mockResolvedValue(
+        mockFeed as ReturnType<Parser["parseURL"]> extends Promise<infer T>
+          ? T
+          : never,
+      );
 
-      const changes = await adapter.detectChanges(current, null);
+      const raw = await adapter.fetch(mockDataSource);
+      const changes = await adapter.detectChanges(raw, null);
 
       expect(changes).toHaveLength(1);
-      expect(changes[0]?.changeType).toBe("rss_new_items");
+      expect(changes[0]?.changeType).toBe("rss_new_item");
+      expect(changes[0]?.url).toBe("https://example.com/first");
     });
 
     it("returns empty when content matches previous hash", async () => {
-      const content = "unchanged feed content";
-      const current = {
-        content,
-        url: "https://example.com/feed.xml",
-        fetchedAt: new Date(),
+      const mockFeed = {
+        items: [
+          { title: "Unchanged", contentSnippet: "Same content" },
+        ],
       };
-      const previousHash = hashContent(content);
+      vi.mocked(Parser.prototype.parseURL).mockResolvedValue(
+        mockFeed as ReturnType<Parser["parseURL"]> extends Promise<infer T>
+          ? T
+          : never,
+      );
 
-      const changes = await adapter.detectChanges(current, previousHash);
+      const raw = await adapter.fetch(mockDataSource);
+      const previousHash = hashContent(raw.content);
+      const changes = await adapter.detectChanges(raw, previousHash);
 
       expect(changes).toHaveLength(0);
+    });
+
+    it("falls back to feed URL when item has no link", async () => {
+      const mockFeed = {
+        items: [
+          { title: "No Link Article", contentSnippet: "Content" },
+        ],
+      };
+      vi.mocked(Parser.prototype.parseURL).mockResolvedValue(
+        mockFeed as ReturnType<Parser["parseURL"]> extends Promise<infer T>
+          ? T
+          : never,
+      );
+
+      const raw = await adapter.fetch(mockDataSource);
+      const changes = await adapter.detectChanges(raw, null);
+
+      expect(changes).toHaveLength(1);
+      expect(changes[0]?.url).toBe(mockDataSource.url);
+    });
+
+    it("filters out items with no title and no snippet", async () => {
+      const mockFeed = {
+        items: [
+          { title: "Valid Item", contentSnippet: "Has content", link: "https://example.com/valid" },
+          { title: undefined, contentSnippet: undefined, link: "https://example.com/empty" },
+        ],
+      };
+      vi.mocked(Parser.prototype.parseURL).mockResolvedValue(
+        mockFeed as ReturnType<Parser["parseURL"]> extends Promise<infer T>
+          ? T
+          : never,
+      );
+
+      const raw = await adapter.fetch(mockDataSource);
+      const changes = await adapter.detectChanges(raw, null);
+
+      expect(changes).toHaveLength(1);
+      expect(changes[0]?.url).toBe("https://example.com/valid");
     });
   });
 });
