@@ -1,4 +1,8 @@
-import type { EvidenceTier, ClaimStatus } from "@/generated/prisma/client";
+import type {
+  EvidenceTier,
+  ClaimStatus,
+  IntelType,
+} from "@/generated/prisma/client";
 
 // === Output Content Schemas (JSON in GeneratedOutput.content) ===
 
@@ -105,6 +109,36 @@ export interface ClaimSummary {
   lastAssessed: string | null;
   evidenceForCount: number;
   evidenceAgainstCount: number;
+}
+
+export interface IntelItem {
+  id: string;
+  competitor: { id: string; name: string };
+  type: IntelType;
+  summary: string;
+  finmoImplication: string | null;
+  evidenceTier: EvidenceTier;
+  sourceUrl: string;
+  simulated: boolean;
+  detectedAt: string;
+}
+
+export interface IntelResponse {
+  items: IntelItem[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface IntelFilters {
+  competitorId?: string;
+  type?: IntelType;
+  tier?: EvidenceTier;
+  simulated?: boolean;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
 }
 
 // === Config Types ===
