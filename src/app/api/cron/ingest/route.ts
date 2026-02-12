@@ -1,0 +1,39 @@
+import type { SourceType } from "@/generated/prisma/client";
+import { NextRequest, NextResponse } from "next/server";
+import { IngestionRunner } from "@/lib/ingestion/runner";
+import type { IngestionAdapter } from "@/lib/ingestion/adapters/base";
+import { WebsiteAdapter } from "@/lib/ingestion/adapters/website";
+import { ChangelogAdapter } from "@/lib/ingestion/adapters/changelog";
+import { RssAdapter } from "@/lib/ingestion/adapters/rss";
+import { StatusPageAdapter } from "@/lib/ingestion/adapters/status-page";
+
+function validateCronSecret(request: NextRequest): boolean {
+  const authHeader = request.headers.get("authorization");
+  if (!authHeader) return false;
+  const token = authHeader.replace("Bearer ", "");
+  return token === process.env.CRON_SECRET;
+}
+
+export async function POST(request: NextRequest) {
+  if (!validateCronSecret(request)) {
+    return NextResponse.json(
+      { error: "Unauthorized", code: "unauthorized" },
+      { status: 401 },
+    );
+  }
+
+  const adapters = new Map<SourceType, IngestionAdapter>([
+    ["WEBSITE", new WebsiteAdapter()],
+    ["CHANGELOG", new ChangelogAdapter()],
+    ["PRESS_RSS", new RssAdapter()],
+    ["STATUS_PAGE", new StatusPageAdapter()],
+  ]);
+
+  const runner = new IngestionRunner(adapters);
+  const result = await runner.run();
+
+  return NextResponse.json({
+    success: true,
+    ...result,
+  });
+}
