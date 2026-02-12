@@ -1,0 +1,206 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum CompetitorTier {
+  TIER_1
+  TIER_2
+}
+
+enum CompetitorStatus {
+  ACTIVE
+  WATCHING
+  ARCHIVED
+}
+
+enum SourceType {
+  WEBSITE
+  CHANGELOG
+  PRESS_RSS
+  STATUS_PAGE
+  REVIEW        // Simulated in MVP
+  JOB_POSTING   // Simulated in MVP
+  SEO           // Simulated in MVP
+  LINKEDIN      // Simulated in MVP
+  REGULATORY    // Simulated in MVP
+}
+
+enum SourceCadence {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+enum SourceHealth {
+  HEALTHY
+  DEGRADED
+  STALE
+}
+
+enum IntelType {
+  PRODUCT_CHANGE
+  PRICING_CHANGE
+  HIRING_SIGNAL
+  PARTNERSHIP
+  REVIEW
+  PRESS
+  OUTAGE
+  MESSAGING_SHIFT
+  SEO_CHANGE
+  REGULATORY
+}
+
+enum EvidenceTier {
+  CONFIRMED
+  INFERRED
+  UNKNOWN
+}
+
+enum ClaimStatus {
+  HOLDING
+  UNDER_PRESSURE
+  CONTESTED
+}
+
+enum OutputType {
+  WEEKLY_PULSE
+  MONTHLY_PULSE
+  SIGNAL_ALERT
+}
+
+enum ValidationStatus {
+  PASSED
+  REJECTED
+  REGENERATED
+  FLAGGED       // Requires human review before publishing
+}
+
+model Competitor {
+  id                String           @id @default(cuid())
+  name              String           @unique
+  tier              CompetitorTier
+  status            CompetitorStatus @default(ACTIVE)
+  createdAt         DateTime         @default(now()) @map("created_at")
+  updatedAt         DateTime         @updatedAt @map("updated_at")
+
+  sources           DataSource[]
+  intelligenceItems IntelligenceItem[]
+  battlecard        Battlecard?
+  reframes          BattlecardReframe[]
+  threatenedClaims  PositioningClaim[] @relation("CompetitorThreats")
+
+  @@map("competitors")
+}
+
+model DataSource {
+  id                 String        @id @default(cuid())
+  competitorId       String        @map("competitor_id")
+  type               SourceType
+  url                String
+  cadence            SourceCadence
+  health             SourceHealth  @default(HEALTHY)
+  lastChecked        DateTime?     @map("last_checked")
+  lastChangeDetected DateTime?     @map("last_change_detected")
+  lastContentHash    String?       @map("last_content_hash")
+  createdAt          DateTime      @default(now()) @map("created_at")
+
+  competitor         Competitor    @relation(fields: [competitorId], references: [id])
+  intelligenceItems  IntelligenceItem[]
+
+  @@map("data_sources")
+}
+
+model IntelligenceItem {
+  id               String       @id @default(cuid())
+  competitorId     String       @map("competitor_id")
+  sourceId         String?      @map("source_id")
+  detectedAt       DateTime     @default(now()) @map("detected_at")
+  type             IntelType
+  rawContent       String       @map("raw_content")
+  summary          String
+  finmoImplication String       @map("finmo_implication")
+  evidenceTier     EvidenceTier @map("evidence_tier")
+  sourceUrl        String       @map("source_url")
+  alertTriggered   Boolean      @default(false) @map("alert_triggered")
+  simulated        Boolean      @default(false)
+  createdAt        DateTime     @default(now()) @map("created_at")
+
+  competitor       Competitor   @relation(fields: [competitorId], references: [id])
+  source           DataSource?  @relation(fields: [sourceId], references: [id])
+  claimsAffected   PositioningClaim[] @relation("ClaimEvidence")
+  reframes         BattlecardReframe[] @relation("ReframeEvidence")
+  outputs          GeneratedOutput[] @relation("OutputIntelligence")
+
+  @@index([competitorId, detectedAt])
+  @@index([type])
+  @@index([evidenceTier])
+  @@index([simulated])
+  @@map("intelligence_items")
+}
+
+model PositioningClaim {
+  id              String      @id @default(cuid())
+  claimText       String      @map("claim_text")
+  currentStatus   ClaimStatus @default(HOLDING) @map("current_status")
+  lastAssessed    DateTime?   @map("last_assessed")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  evidenceItems   IntelligenceItem[] @relation("ClaimEvidence")
+  threatenedBy    Competitor[] @relation("CompetitorThreats")
+
+  @@map("positioning_claims")
+}
+
+model BattlecardReframe {
+  id               String       @id @default(cuid())
+  competitorId     String       @map("competitor_id")
+  weakness         String
+  reframe          String
+  antiReframe      String       @map("anti_reframe")
+  evidenceTier     EvidenceTier @map("evidence_tier")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  competitor       Competitor   @relation(fields: [competitorId], references: [id])
+  sourceItems      IntelligenceItem[] @relation("ReframeEvidence")
+
+  @@map("battlecard_reframes")
+}
+
+model Battlecard {
+  id               String       @id @default(cuid())
+  competitorId     String       @unique @map("competitor_id")
+  whenTheyComeUp   String       @map("when_they_come_up")
+  theirPitch       Json         @map("their_pitch")       // string[]
+  weaknesses       Json                                    // Array<{ text, evidenceTier, sourceUrl }>
+  openQuestions    Json          @map("open_questions")    // string[]
+  createdAt        DateTime     @default(now()) @map("created_at")
+  updatedAt        DateTime     @updatedAt @map("updated_at")
+
+  competitor       Competitor   @relation(fields: [competitorId], references: [id])
+
+  @@map("battlecards")
+}
+
+model GeneratedOutput {
+  id                    String           @id @default(cuid())
+  type                  OutputType
+  publishedAt           DateTime         @default(now()) @map("published_at")
+  headline              String
+  content               Json
+  wordCount             Int              @map("word_count")
+  validationStatus      ValidationStatus @default(PASSED) @map("validation_status")
+  generationMetadata    Json?            @map("generation_metadata")
+  createdAt             DateTime         @default(now()) @map("created_at")
+
+  intelligenceItems     IntelligenceItem[] @relation("OutputIntelligence")
+
+  @@index([type, publishedAt])
+  @@map("generated_outputs")
+}
