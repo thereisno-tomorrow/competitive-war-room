@@ -21,7 +21,11 @@ export class ClaudeProvider implements LLMProvider {
     this.client = new Anthropic();
   }
 
-  async synthesize(prompt: string, context: Record<string, unknown>): Promise<string> {
+  async synthesize(
+    prompt: string,
+    context: Record<string, unknown>,
+    options?: { system?: string },
+  ): Promise<string> {
     const contextStr = Object.entries(context)
       .map(([key, value]) => `${key}: ${JSON.stringify(value)}`)
       .join("\n");
@@ -29,6 +33,7 @@ export class ClaudeProvider implements LLMProvider {
     const response = await this.client.messages.create({
       model: SONNET_MODEL,
       max_tokens: 8192,
+      ...(options?.system ? { system: options.system } : {}),
       messages: [
         {
           role: "user",

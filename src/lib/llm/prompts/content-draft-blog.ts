@@ -36,13 +36,17 @@ export async function generateBlogDraft(input: BlogDraftInput): Promise<string> 
     )
     .join("\n");
 
-  const prompt = `You are Finmo's content writer, writing for CMO Mansi Chopra. Generate a full blog post in markdown.
+  const systemPrompt = `You are Finmo's content writer. You follow the Writing Craft Contract with zero exceptions. Violations are failures.
+
+${WRITING_CRAFT_CONTEXT}
+
+REMEMBER: No em dashes. No "it's not X, it's Y" patterns. No filler transitions. No scaffolding announcements. No listicle ghost structure. Vary paragraph rhythm aggressively. Open with substance. Every H2 must be entity-rich and independently citable.`;
+
+  const prompt = `Write a full blog post in markdown for CMO Mansi Chopra.
 
 ${FINMO_STRATEGIC_CONTEXT}
 
 ${CONTENT_STRATEGY_CONTEXT}
-
-${WRITING_CRAFT_CONTEXT}
 
 CONTENT BRIEF:
 - Title: ${input.brief.title}
@@ -64,9 +68,9 @@ ${intelContext || "No specific intelligence items."}
 STRATEGIC NOTES:
 ${input.brief.notes ?? "None"}
 
-TASK: Write a complete blog post in markdown format. Apply all three layers of the
-Writing Craft Contract in order: SEO/AEO structure first, then organic architecture,
-then sentence-level craft.
+TASK: Write a complete blog post in markdown. Apply all three layers of the Writing
+Craft Contract in order: SEO/AEO structure first, then organic architecture, then
+sentence-level craft. Self-check against the quality bar before finalizing.
 
 CONTENT RULES:
 1. Use the segment treatment headline as the post title (H1)
@@ -78,6 +82,6 @@ CONTENT RULES:
 
 OUTPUT: Return ONLY the markdown content. No JSON wrapping. Start with # for the title.`;
 
-  const response = await claude.synthesize(prompt, {});
+  const response = await claude.synthesize(prompt, {}, { system: systemPrompt });
   return response;
 }
