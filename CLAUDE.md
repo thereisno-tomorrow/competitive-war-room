@@ -21,9 +21,9 @@ When in doubt about scope, check Section 13 (Scope Boundaries) of the MVP PRD.
 - **Tailwind CSS v4** + **shadcn/ui** for UI (CSS-based config, no `tailwind.config.js`)
 - **TanStack Query 5.x** for client-side data fetching
 - **Prisma 7.4** ORM + `@prisma/adapter-pg` driver adapter + **PostgreSQL** (Docker locally, Neon on Vercel)
-- **@anthropic-ai/sdk** — Sonnet 4.5 for synthesis/generation, Haiku 4.5 for classification
+- **@anthropic-ai/sdk** — Sonnet 4.5 for classification + synthesis/generation
 - **Cheerio 1.x** + **rss-parser 3.x** for scraping/ingestion
-- **Vitest 4.x** for testing (168 tests, 21 test files)
+- **Vitest 4.x** for testing (~220 tests, 24 test files)
 - Deploy: **Vercel Pro** (300s timeout required)
 
 ## Architecture
@@ -63,9 +63,11 @@ src/
 └── types/            # Shared TypeScript types (content schemas, API response types)
 
 prisma/
-├── schema.prisma     # Database schema
+├── schema.prisma     # Database schema (includes SeenArticle for feed memory)
 ├── seed.ts           # Seed competitors, sources, claims, battlecards
-└── *.ts              # Utility scripts (cleanup-simulated, reset-generate, fix-rss-sources, etc.)
+├── wipe-and-reset.ts # Full wipe: intel items, seen articles, source state
+├── run-ingestion.ts  # Hit ingestion API N times (requires running dev server)
+└── *.ts              # Other utility scripts (cleanup-simulated, reset-generate, etc.)
 ```
 
 ## Commands
@@ -79,7 +81,7 @@ npm run format                 # Prettier
 npm run type-check             # tsc --noEmit
 
 # Tests
-npm test                       # Vitest (all 168 tests)
+npm test                       # Vitest (all ~220 tests)
 npm run test:watch             # Vitest watch mode
 npm run test:smoke             # Seed -> ingest -> generate -> validate
 
@@ -92,11 +94,15 @@ npx prisma db seed             # Seed competitors, sources, claims, test data
 curl -X POST http://localhost:3000/api/cron/ingest -H "Authorization: Bearer warroom-local-dev"
 curl -X POST "http://localhost:3000/api/cron/generate?force=true" -H "Authorization: Bearer warroom-local-dev"
 
+# Full reset (wipe + seed + ingest + generate)
+npx tsx prisma/wipe-and-reset.ts                                  # Wipe intel, seen articles, reset sources
+npx prisma db seed                                                # Re-seed competitors, claims, battlecards
+npx tsx prisma/run-ingestion.ts                                   # Run ingestion (requires dev server running)
+npx tsx prisma/run-ingestion.ts 3                                 # Run ingestion 3 times
+
 # Utility scripts
 npx tsx -r dotenv/config prisma/cleanup-simulated.ts              # Delete all simulated data
 npx tsx -r dotenv/config prisma/reset-generate.ts                 # Clear generated outputs, reset alert flags
-npx tsx -r dotenv/config prisma/cleanup-first-run-hallucinations.ts  # Clean hallucinated baseline items
-npx tsx -r dotenv/config prisma/resolve-existing-urls.ts          # Resolve Google News URLs to publisher URLs
 npx tsx -r dotenv/config prisma/backfill-fingerprints.ts          # Regenerate eventFingerprint for all items
 npx tsx -r dotenv/config prisma/dedup-existing.ts                 # Remove duplicate items by fingerprint
 ```
@@ -106,6 +112,7 @@ npx tsx -r dotenv/config prisma/dedup-existing.ts                 # Remove dupli
 Prisma utility scripts live in `prisma/*.ts`. All follow the same boilerplate:
 
 ```typescript
+import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 const adapter = new PrismaPg({ connectionString: process.env.DATABASE_URL });
@@ -114,7 +121,7 @@ async function main() { /* ... */ }
 main().then(() => prisma.$disconnect()).catch((e) => { console.error(e); prisma.$disconnect(); process.exit(1); });
 ```
 
-Run: `npx tsx -r dotenv/config prisma/script-name.ts`
+Run: `npx tsx prisma/script-name.ts` (dotenv loaded via import at top)
 
 **Never use inline `tsx -e "..."` with Prisma** — Windows shell escaping breaks `$disconnect()`. Always create a script file.
 
@@ -127,13 +134,15 @@ A migration on buggy logic doesn't fail gracefully — it efficiently corrupts y
 
 ## Pipeline Architecture
 
-**Ingestion** (`/api/cron/ingest`) — ~22s per run
-1. Fetches all active DataSources in parallel (batches of 5, 15s timeout)
-2. Diff-engine hashes content for change detection
-3. **EVENT sources** (RSS, LinkedIn): process items directly — each item IS intelligence
-4. **STATE sources** (website, changelog, status-page): first run stores baseline hash only (no items); subsequent runs classify deltas
-5. Haiku 4.5 classifies changes → type, summary, finmoImplication, evidenceTier, affectedClaimIds (or `SKIP` if non-noteworthy)
-6. Creates `IntelligenceItem` with `simulated: false`, links positioning claims
+**Ingestion** (`/api/cron/ingest`) — ~8s steady-state, ~60s with new articles
+1. **FETCH** — pull RSS feeds from all EVENT sources (~385 items)
+2. **REMEMBER** — check `seen_articles` table, filter to genuinely new URLs, record ALL URLs as seen. Safety cap: max 50 new items/run.
+3. **TITLE DEDUP** — Jaccard similarity within batch (free, catches cross-publisher dupes)
+4. **ENRICH** — fetch full article content via Readability (best-effort, Google News resolution currently broken)
+5. **CLASSIFY** — Sonnet 4.5 classifies → type, summary, finmoImplication, evidenceTier, affectedClaimIds (or `SKIP`)
+6. **STORE** — create `IntelligenceItem` with fingerprint dedup safety net
+- **STATE sources** (website, changelog, status-page): separate loop — first run stores baseline hash only; subsequent runs classify deltas
+- **Cost:** $0.00/run steady-state, $0.01 per genuinely new article
 
 **Generation** (`/api/cron/generate`) — 3-5 min
 1. Signal alerts: evaluates unprocessed items against alert thresholds, generates via Sonnet 4.5

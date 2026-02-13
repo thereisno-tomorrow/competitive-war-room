@@ -40,10 +40,20 @@ export async function POST(request: NextRequest) {
 
   const llm = new ClaudeProvider();
   const runner = new IngestionRunner(adapters, llm);
-  const result = await runner.run();
 
-  return NextResponse.json({
-    success: true,
-    ...result,
-  });
+  try {
+    const result = await runner.run();
+    return NextResponse.json({
+      success: true,
+      ...result,
+    });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    const stack = err instanceof Error ? err.stack : undefined;
+    console.error("[INGEST] Fatal error:", message, stack);
+    return NextResponse.json(
+      { error: message, stack },
+      { status: 500 },
+    );
+  }
 }

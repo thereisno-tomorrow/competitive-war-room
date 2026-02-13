@@ -1,3 +1,4 @@
+import "dotenv/config";
 import { PrismaClient } from "../src/generated/prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 
@@ -22,6 +23,10 @@ async function main() {
   // 2. Delete all intelligence items
   const items = await prisma.intelligenceItem.deleteMany({});
   console.log(`Deleted ${items.count} intelligence items`);
+
+  // 2b. Clear feed memory (seen articles)
+  const seen = await prisma.seenArticle.deleteMany({});
+  console.log(`Cleared ${seen.count} seen articles`);
 
   // 3. Reset all data source state (forces fresh first run)
   const sources = await prisma.dataSource.updateMany({

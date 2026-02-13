@@ -134,7 +134,7 @@ describe("RssAdapter", () => {
       expect(changes[0]?.url).toBe("https://example.com/first");
     });
 
-    it("returns empty when content matches previous hash", async () => {
+    it("returns items even when content matches previous hash (URL dedup handles repeats)", async () => {
       const mockFeed = {
         items: [
           { title: "Unchanged", contentSnippet: "Same content" },
@@ -150,7 +150,9 @@ describe("RssAdapter", () => {
       const previousHash = hashContent(raw.content);
       const changes = await adapter.detectChanges(raw, previousHash);
 
-      expect(changes).toHaveLength(0);
+      // Hash gate removed — RSS adapter always returns items.
+      // URL dedup in the runner handles repeat articles cheaply.
+      expect(changes).toHaveLength(1);
     });
 
     it("falls back to feed URL when item has no link", async () => {

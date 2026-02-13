@@ -49,6 +49,10 @@ export const INGESTION = {
   MAX_ARTICLE_ENRICHMENTS_PER_SOURCE: 10,
   /** Timeout for individual article fetch including URL resolution (ms) */
   ARTICLE_FETCH_TIMEOUT_MS: 10_000,
+  /** Jaccard threshold for title dedup within a single batch */
+  TITLE_SIMILARITY_THRESHOLD_BATCH: 0.5,
+  /** Global safety cap: max new items per run (prevents cost explosion on fresh start) */
+  MAX_NEW_ITEMS_PER_RUN: 50,
 } as const;
 
 // ---------------------------------------------------------------------------

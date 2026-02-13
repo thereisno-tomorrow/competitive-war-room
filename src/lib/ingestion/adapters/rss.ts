@@ -2,7 +2,7 @@ import Parser from "rss-parser";
 import type { SourceType } from "@/generated/prisma/client";
 import type { DataSource } from "@/generated/prisma/client";
 import type { IngestionAdapter, RawContent, DetectedChange } from "./base";
-import { hasContentChanged } from "../diff-engine";
+
 import { INGESTION } from "@/lib/config/thresholds";
 import { normalizeGoogleNewsUrl } from "../google-news-url";
 
@@ -42,9 +42,10 @@ export class RssAdapter implements IngestionAdapter {
     current: RawContent,
     previousHash: string | null,
   ): Promise<DetectedChange[]> {
-    if (!hasContentChanged(current.content, previousHash)) {
-      return [];
-    }
+    // No hash gate — always return items. URL dedup in the runner handles
+    // repeat articles cheaply, so we don't need the aggregate hash shortcut.
+    // This fixes the "5 runs to populate" problem where RSS feed item ordering
+    // changes caused inconsistent hash-based gating.
 
     const isFirstRun = previousHash === null;
 

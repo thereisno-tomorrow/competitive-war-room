@@ -144,6 +144,7 @@ model DataSource {
 
   competitor         Competitor    @relation(fields: [competitorId], references: [id])
   intelligenceItems  IntelligenceItem[]
+  seenArticles       SeenArticle[]
 
   @@map("data_sources")
 }
@@ -162,6 +163,7 @@ model IntelligenceItem {
   alertTriggered   Boolean      @default(false) @map("alert_triggered")
   simulated        Boolean      @default(false)
   eventFingerprint String?      @map("event_fingerprint")
+  sourceTitle      String?      @map("source_title")
   createdAt        DateTime     @default(now()) @map("created_at")
 
   competitor       Competitor   @relation(fields: [competitorId], references: [id])
@@ -175,6 +177,7 @@ model IntelligenceItem {
   @@index([type])
   @@index([evidenceTier])
   @@index([simulated])
+  @@index([competitorId, sourceUrl])
   @@map("intelligence_items")
 }
 
@@ -269,6 +272,18 @@ model ContentBrief {
   @@index([status])
   @@index([bucket])
   @@map("content_briefs")
+}
+
+model SeenArticle {
+  id         String     @id @default(cuid())
+  sourceId   String     @map("source_id")
+  articleUrl String     @map("article_url")
+  firstSeen  DateTime   @default(now()) @map("first_seen")
+
+  source     DataSource @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@unique([sourceId, articleUrl])
+  @@map("seen_articles")
 }
 
 model ContentDraft {

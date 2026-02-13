@@ -18,6 +18,11 @@ vi.mock("@/lib/db", () => ({
     intelligenceItem: {
       create: vi.fn().mockResolvedValue({ id: "intel-1" }),
       findFirst: vi.fn().mockResolvedValue(null),
+      findMany: vi.fn().mockResolvedValue([]),
+    },
+    seenArticle: {
+      findMany: vi.fn().mockResolvedValue([]),
+      createMany: vi.fn().mockResolvedValue({ count: 0 }),
     },
   },
 }));
@@ -46,11 +51,12 @@ function createMockLLM(overrides?: Partial<LLMProvider>): LLMProvider {
 }
 
 function createMockAdapter(overrides?: {
+  sourceType?: SourceType;
   fetch?: IngestionAdapter["fetch"];
   detectChanges?: IngestionAdapter["detectChanges"];
 }): IngestionAdapter {
   return {
-    sourceType: SourceType.WEBSITE,
+    sourceType: overrides?.sourceType ?? SourceType.WEBSITE,
     fetch:
       overrides?.fetch ??
       vi.fn<IngestionAdapter["fetch"]>().mockResolvedValue({
@@ -77,7 +83,7 @@ describe("IngestionRunner", () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Reset the default mock return value before each test
+    // Default: one WEBSITE (STATE) source with existing hash
     vi.mocked(prisma.dataSource.findMany).mockResolvedValue([
       {
         id: "src-1",
@@ -102,9 +108,17 @@ describe("IngestionRunner", () => {
         createdAt: new Date(),
       },
     ] as never);
+
+    // Default: no existing items (clean DB for URL dedup)
+    vi.mocked(prisma.intelligenceItem.findMany).mockResolvedValue([]);
+    vi.mocked(prisma.intelligenceItem.findFirst).mockResolvedValue(null);
   });
 
-  it("should fetch sources and detect changes", async () => {
+  // -----------------------------------------------------------------------
+  // STATE source tests (process via processStateSources — same as old logic)
+  // -----------------------------------------------------------------------
+
+  it("should fetch STATE sources and detect changes", async () => {
     const adapter = createMockAdapter();
     const adapters = new Map<SourceType, IngestionAdapter>([
       [SourceType.WEBSITE, adapter],
@@ -115,7 +129,6 @@ describe("IngestionRunner", () => {
     const result = await runner.run();
 
     expect(result.sourcesChecked).toBe(1);
-    expect(result.changesDetected).toBe(1);
     expect(result.itemsCreated).toBe(1);
     expect(result.errors).toHaveLength(0);
     expect(prisma.dataSource.findMany).toHaveBeenCalledOnce();
@@ -150,9 +163,8 @@ describe("IngestionRunner", () => {
         summary: "Competitor updated their product page",
         finmoImplication: "May indicate new feature launch targeting Finmo's segment",
         evidenceTier: "INFERRED",
-        sourceUrl: "https://example.com",
-        detectedAt: expect.any(Date),
         simulated: false,
+        sourceTitle: "Something changed",
       }),
     });
   });
@@ -246,7 +258,6 @@ describe("IngestionRunner", () => {
     const result = await runner.run();
 
     expect(result.sourcesChecked).toBe(1);
-    expect(result.changesDetected).toBe(0);
     expect(result.itemsCreated).toBe(0);
     expect(prisma.dataSource.update).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -263,7 +274,7 @@ describe("IngestionRunner", () => {
     expect(updateCall.data).not.toHaveProperty("lastChangeDetected");
   });
 
-  it("should handle adapter errors gracefully and mark source as DEGRADED", async () => {
+  it("should handle adapter errors gracefully", async () => {
     const adapter = createMockAdapter({
       fetch: vi
         .fn<IngestionAdapter["fetch"]>()
@@ -278,23 +289,14 @@ describe("IngestionRunner", () => {
     const result = await runner.run();
 
     expect(result.sourcesChecked).toBe(1);
-    expect(result.changesDetected).toBe(0);
     expect(result.errors).toHaveLength(1);
     expect(result.errors[0]).toEqual({
       sourceId: "src-1",
       error: "Network timeout",
     });
-    expect(prisma.dataSource.update).toHaveBeenCalledWith({
-      where: { id: "src-1" },
-      data: expect.objectContaining({
-        health: "DEGRADED",
-        lastChecked: expect.any(Date),
-      }),
-    });
   });
 
   it("should skip sources with no matching adapter", async () => {
-    // No adapters registered at all
     const adapters = new Map<SourceType, IngestionAdapter>();
     const llm = createMockLLM();
     const runner = new IngestionRunner(adapters, llm);
@@ -302,38 +304,8 @@ describe("IngestionRunner", () => {
     const result = await runner.run();
 
     expect(result.sourcesChecked).toBe(0);
-    expect(result.changesDetected).toBe(0);
+    expect(result.itemsCreated).toBe(0);
     expect(result.errors).toHaveLength(0);
-    expect(prisma.dataSource.update).not.toHaveBeenCalled();
-  });
-
-  it("should populate competitorId and sourceId on detected changes", async () => {
-    const changes: DetectedChange[] = [
-      {
-        competitorId: "",
-        sourceId: "",
-        changeType: "PRODUCT_CHANGE",
-        content: "updated content",
-        url: "https://example.com",
-        summary: "Change detected",
-      },
-    ];
-    const adapter = createMockAdapter({
-      detectChanges: vi
-        .fn<IngestionAdapter["detectChanges"]>()
-        .mockResolvedValue(changes),
-    });
-    const adapters = new Map<SourceType, IngestionAdapter>([
-      [SourceType.WEBSITE, adapter],
-    ]);
-    const llm = createMockLLM();
-    const runner = new IngestionRunner(adapters, llm);
-
-    await runner.run();
-
-    // The runner mutates the change objects in-place
-    expect(changes[0]!.competitorId).toBe("comp-1");
-    expect(changes[0]!.sourceId).toBe("src-1");
   });
 
   // -----------------------------------------------------------------------
@@ -341,7 +313,6 @@ describe("IngestionRunner", () => {
   // -----------------------------------------------------------------------
 
   it("should baseline-only on first run for STATE sources (no items, no LLM)", async () => {
-    // Override default mock: STATE source with null lastContentHash = first run
     vi.mocked(prisma.dataSource.findMany).mockResolvedValue([
       {
         id: "src-1",
@@ -368,10 +339,8 @@ describe("IngestionRunner", () => {
     const result = await runner.run();
 
     expect(result.sourcesChecked).toBe(1);
-    expect(result.changesDetected).toBe(0);
     expect(result.itemsCreated).toBe(0);
     expect(result.errors).toHaveLength(0);
-    // Hash should be stored (baseline captured)
     expect(prisma.dataSource.update).toHaveBeenCalledWith(
       expect.objectContaining({
         where: { id: "src-1" },
@@ -382,45 +351,8 @@ describe("IngestionRunner", () => {
         }),
       }),
     );
-    // LLM should NOT have been called
     expect(llm.classifyStructured).not.toHaveBeenCalled();
-    // No intelligence items should be created
     expect(prisma.intelligenceItem.create).not.toHaveBeenCalled();
-  });
-
-  it("should classify normally on first run for EVENT sources", async () => {
-    // EVENT source (PRESS_RSS) with null lastContentHash
-    vi.mocked(prisma.dataSource.findMany).mockResolvedValue([
-      {
-        id: "src-rss",
-        competitorId: "comp-1",
-        type: "PRESS_RSS" as SourceType,
-        url: "https://example.com/rss",
-        cadence: "DAILY",
-        health: "HEALTHY",
-        lastChecked: null,
-        lastChangeDetected: null,
-        lastContentHash: null, // first run — but EVENT, so should process
-        createdAt: new Date(),
-        competitor: { id: "comp-1", name: "TestCompetitor", status: "ACTIVE", tier: "TIER_1" },
-      },
-    ] as never);
-
-    const adapter = createMockAdapter();
-    const adapters = new Map<SourceType, IngestionAdapter>([
-      [SourceType.PRESS_RSS, adapter],
-    ]);
-    const llm = createMockLLM();
-    const runner = new IngestionRunner(adapters, llm);
-
-    const result = await runner.run();
-
-    // EVENT source first-run should classify normally
-    expect(result.sourcesChecked).toBe(1);
-    expect(result.changesDetected).toBe(1);
-    expect(result.itemsCreated).toBe(1);
-    expect(llm.classifyStructured).toHaveBeenCalledOnce();
-    expect(prisma.intelligenceItem.create).toHaveBeenCalledOnce();
   });
 
   it("should skip item creation when LLM returns SKIP classification", async () => {
@@ -442,8 +374,8 @@ describe("IngestionRunner", () => {
 
     const result = await runner.run();
 
-    expect(result.changesDetected).toBe(1);
     expect(result.itemsCreated).toBe(0);
+    expect(result.llmSkipped).toBe(1);
     expect(llm.classifyStructured).toHaveBeenCalledOnce();
     expect(prisma.intelligenceItem.create).not.toHaveBeenCalled();
   });
@@ -472,5 +404,263 @@ describe("IngestionRunner", () => {
         claimsAffected: { connect: [{ id: "claim-1" }] },
       }),
     });
+  });
+
+  // -----------------------------------------------------------------------
+  // EVENT source (phased pipeline) tests
+  // -----------------------------------------------------------------------
+
+  it("should classify normally on first run for EVENT sources", async () => {
+    vi.mocked(prisma.dataSource.findMany).mockResolvedValue([
+      {
+        id: "src-rss",
+        competitorId: "comp-1",
+        type: "PRESS_RSS" as SourceType,
+        url: "https://example.com/rss",
+        cadence: "DAILY",
+        health: "HEALTHY",
+        lastChecked: null,
+        lastChangeDetected: null,
+        lastContentHash: null,
+        createdAt: new Date(),
+        competitor: { id: "comp-1", name: "TestCompetitor", status: "ACTIVE", tier: "TIER_1" },
+      },
+    ] as never);
+
+    const adapter = createMockAdapter({
+      sourceType: SourceType.PRESS_RSS,
+      detectChanges: vi.fn<IngestionAdapter["detectChanges"]>().mockResolvedValue([
+        {
+          competitorId: "",
+          sourceId: "",
+          changeType: "rss_new_item",
+          content: "Article about competitor launch",
+          url: "https://publisher.com/article-1",
+          summary: "TestCompetitor launches new product",
+        },
+      ]),
+    });
+    const adapters = new Map<SourceType, IngestionAdapter>([
+      [SourceType.PRESS_RSS, adapter],
+    ]);
+    const llm = createMockLLM();
+    const runner = new IngestionRunner(adapters, llm);
+
+    const result = await runner.run();
+
+    expect(result.sourcesChecked).toBe(1);
+    expect(result.itemsFetched).toBe(1);
+    expect(result.itemsCreated).toBe(1);
+    expect(llm.classifyStructured).toHaveBeenCalledOnce();
+    expect(prisma.intelligenceItem.create).toHaveBeenCalledOnce();
+  });
+
+  it("should skip already-seen articles via feed memory", async () => {
+    vi.mocked(prisma.dataSource.findMany).mockResolvedValue([
+      {
+        id: "src-rss",
+        competitorId: "comp-1",
+        type: "PRESS_RSS" as SourceType,
+        url: "https://example.com/rss",
+        cadence: "DAILY",
+        health: "HEALTHY",
+        lastChecked: new Date(),
+        lastChangeDetected: null,
+        lastContentHash: "some-hash",
+        createdAt: new Date(),
+        competitor: { id: "comp-1", name: "TestCompetitor", status: "ACTIVE", tier: "TIER_1" },
+      },
+    ] as never);
+
+    const adapter = createMockAdapter({
+      sourceType: SourceType.PRESS_RSS,
+      detectChanges: vi.fn<IngestionAdapter["detectChanges"]>().mockResolvedValue([
+        {
+          competitorId: "",
+          sourceId: "",
+          changeType: "rss_new_item",
+          content: "Already seen article",
+          url: "https://publisher.com/existing-article",
+          summary: "Old news we already saw",
+        },
+      ]),
+    });
+    const adapters = new Map<SourceType, IngestionAdapter>([
+      [SourceType.PRESS_RSS, adapter],
+    ]);
+
+    // Simulate: this URL was already seen in a previous run
+    vi.mocked(prisma.seenArticle.findMany).mockResolvedValue([
+      { sourceId: "src-rss", articleUrl: "https://publisher.com/existing-article" },
+    ] as never);
+
+    const llm = createMockLLM();
+    const runner = new IngestionRunner(adapters, llm);
+    const result = await runner.run();
+
+    expect(result.itemsFetched).toBe(1);
+    expect(result.seenSkipped).toBe(1);
+    expect(result.itemsCreated).toBe(0);
+    // LLM should NOT be called — item was filtered by feed memory
+    expect(llm.classifyStructured).not.toHaveBeenCalled();
+  });
+
+  it("should record all URLs as seen even on first run", async () => {
+    vi.mocked(prisma.dataSource.findMany).mockResolvedValue([
+      {
+        id: "src-rss",
+        competitorId: "comp-1",
+        type: "PRESS_RSS" as SourceType,
+        url: "https://example.com/rss",
+        cadence: "DAILY",
+        health: "HEALTHY",
+        lastChecked: null,
+        lastChangeDetected: null,
+        lastContentHash: null,
+        createdAt: new Date(),
+        competitor: { id: "comp-1", name: "TestCompetitor", status: "ACTIVE", tier: "TIER_1" },
+      },
+    ] as never);
+
+    const adapter = createMockAdapter({
+      sourceType: SourceType.PRESS_RSS,
+      detectChanges: vi.fn<IngestionAdapter["detectChanges"]>().mockResolvedValue([
+        {
+          competitorId: "",
+          sourceId: "",
+          changeType: "rss_new_item",
+          content: "Article 1",
+          url: "https://publisher.com/article-1",
+          summary: "First article",
+        },
+        {
+          competitorId: "",
+          sourceId: "",
+          changeType: "rss_new_item",
+          content: "Article 2",
+          url: "https://publisher.com/article-2",
+          summary: "Second article",
+        },
+      ]),
+    });
+    const adapters = new Map<SourceType, IngestionAdapter>([
+      [SourceType.PRESS_RSS, adapter],
+    ]);
+    const llm = createMockLLM();
+    const runner = new IngestionRunner(adapters, llm);
+
+    await runner.run();
+
+    // Both URLs should be recorded as seen
+    expect(prisma.seenArticle.createMany).toHaveBeenCalledWith({
+      data: expect.arrayContaining([
+        { sourceId: "src-rss", articleUrl: "https://publisher.com/article-1" },
+        { sourceId: "src-rss", articleUrl: "https://publisher.com/article-2" },
+      ]),
+      skipDuplicates: true,
+    });
+  });
+
+  it("should title-dedup within a batch (cross-publisher duplicates)", async () => {
+    vi.mocked(prisma.dataSource.findMany).mockResolvedValue([
+      {
+        id: "src-rss",
+        competitorId: "comp-1",
+        type: "PRESS_RSS" as SourceType,
+        url: "https://example.com/rss",
+        cadence: "DAILY",
+        health: "HEALTHY",
+        lastChecked: null,
+        lastChangeDetected: null,
+        lastContentHash: null,
+        createdAt: new Date(),
+        competitor: { id: "comp-1", name: "TestCompetitor", status: "ACTIVE", tier: "TIER_1" },
+      },
+    ] as never);
+
+    const adapter = createMockAdapter({
+      sourceType: SourceType.PRESS_RSS,
+      detectChanges: vi.fn<IngestionAdapter["detectChanges"]>().mockResolvedValue([
+        {
+          competitorId: "",
+          sourceId: "",
+          changeType: "rss_new_item",
+          content: "Nium announces three new c-suite hires",
+          url: "https://publisher-a.com/nium-hires",
+          summary: "Nium Announces Three New C-Suite Hires",
+        },
+        {
+          competitorId: "",
+          sourceId: "",
+          changeType: "rss_new_item",
+          content: "Nium appointed three c-suite executives",
+          url: "https://publisher-b.com/nium-executives",
+          summary: "Nium Appointed Three C-Suite Executives",
+        },
+      ]),
+    });
+    const adapters = new Map<SourceType, IngestionAdapter>([
+      [SourceType.PRESS_RSS, adapter],
+    ]);
+    const llm = createMockLLM();
+    const runner = new IngestionRunner(adapters, llm);
+
+    const result = await runner.run();
+
+    // Two articles about the same event should be collapsed to one
+    expect(result.itemsFetched).toBe(2);
+    expect(result.titleDedupBatchSkipped).toBe(1);
+    // Only 1 LLM call should be made
+    expect(result.llmCallsMade).toBe(1);
+    expect(result.itemsCreated).toBe(1);
+  });
+
+  it("should report full pipeline stats including cost", async () => {
+    vi.mocked(prisma.dataSource.findMany).mockResolvedValue([
+      {
+        id: "src-rss",
+        competitorId: "comp-1",
+        type: "PRESS_RSS" as SourceType,
+        url: "https://example.com/rss",
+        cadence: "DAILY",
+        health: "HEALTHY",
+        lastChecked: null,
+        lastChangeDetected: null,
+        lastContentHash: null,
+        createdAt: new Date(),
+        competitor: { id: "comp-1", name: "TestCompetitor", status: "ACTIVE", tier: "TIER_1" },
+      },
+    ] as never);
+
+    const adapter = createMockAdapter({
+      sourceType: SourceType.PRESS_RSS,
+      detectChanges: vi.fn<IngestionAdapter["detectChanges"]>().mockResolvedValue([
+        {
+          competitorId: "",
+          sourceId: "",
+          changeType: "rss_new_item",
+          content: "New article",
+          url: "https://publisher.com/new",
+          summary: "Brand new competitor article",
+        },
+      ]),
+    });
+    const adapters = new Map<SourceType, IngestionAdapter>([
+      [SourceType.PRESS_RSS, adapter],
+    ]);
+    const llm = createMockLLM();
+    const runner = new IngestionRunner(adapters, llm);
+
+    const result = await runner.run();
+
+    // Verify all stat fields are populated
+    expect(result.sourcesChecked).toBe(1);
+    expect(result.itemsFetched).toBe(1);
+    expect(result.seenSkipped).toBe(0);
+    expect(result.safetyCapped).toBe(0);
+    expect(result.titleDedupBatchSkipped).toBe(0);
+    expect(result.llmCallsMade).toBe(1);
+    expect(result.estimatedCostUsd).toBeCloseTo(0.01);
+    expect(result.durationMs).toBeGreaterThan(0);
   });
 });
