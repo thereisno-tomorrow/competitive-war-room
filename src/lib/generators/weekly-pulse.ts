@@ -37,8 +37,9 @@ export async function generateWeeklyPulse(
   });
 
   let content: WeeklyPulseContent | null = null;
-  let validationStatus: GenerationResult["validationStatus"] = "PASSED";
+  let validationStatus: GenerationResult["validationStatus"] = "REJECTED";
   let attempts = 0;
+  let lastErrors: string[] = [];
 
   while (attempts < OUTPUT_LIMITS.MAX_REGENERATION_ATTEMPTS) {
     attempts++;
@@ -52,14 +53,11 @@ export async function generateWeeklyPulse(
       validationStatus = attempts > 1 ? "REGENERATED" : "PASSED";
       break;
     }
+    lastErrors = validation.errors;
+  }
 
-    if (attempts >= OUTPUT_LIMITS.MAX_REGENERATION_ATTEMPTS) {
-      validationStatus = "REJECTED";
-      console.error(
-        `Weekly pulse rejected after ${attempts} attempts:`,
-        validation.errors,
-      );
-    }
+  if (validationStatus === "REJECTED") {
+    console.error(`Weekly pulse rejected after ${attempts} attempts:`, lastErrors);
   }
 
   if (!content) throw new Error("Failed to generate weekly pulse content");
@@ -70,13 +68,14 @@ export async function generateWeeklyPulse(
       ? "Nothing Notable This Week"
       : `${items.length} signal${items.length !== 1 ? "s" : ""} detected this week`;
 
-  const wordCount = JSON.stringify(content).split(/\s+/).length;
+  const contentJson = JSON.stringify(content);
+  const wordCount = contentJson.split(/\s+/).length;
 
   const output = await prisma.generatedOutput.create({
     data: {
       type: "WEEKLY_PULSE",
       headline,
-      content: JSON.parse(JSON.stringify(content)),
+      content: JSON.parse(contentJson),
       wordCount,
       validationStatus,
       generationMetadata: { attempts, generatedAt: now.toISOString() },

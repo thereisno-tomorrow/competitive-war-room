@@ -9,6 +9,7 @@ import type {
   ProofPoint,
 } from "@/types";
 import { EvidenceTierBadge } from "@/components/shared/evidence-tier-badge";
+import { SectionCard } from "@/components/shared/section-card";
 import { Badge } from "@/components/ui/badge";
 
 function formatDate(iso: string): string {
@@ -17,45 +18,6 @@ function formatDate(iso: string): string {
     month: "long",
     day: "numeric",
   });
-}
-
-// ─── Section Card (consistent with DashboardCard pattern) ─────
-
-function SectionCard({
-  title,
-  guide,
-  children,
-  className = "",
-  accent,
-}: {
-  title: string;
-  guide: string;
-  children: React.ReactNode;
-  className?: string;
-  accent?: "green" | "amber";
-}) {
-  const borderClass = accent === "green"
-    ? "border-emerald-200/80"
-    : accent === "amber"
-      ? "border-amber-200/80"
-      : "border-zinc-200/80";
-  const headerBorderClass = accent === "green"
-    ? "border-emerald-100"
-    : accent === "amber"
-      ? "border-amber-100"
-      : "border-zinc-100";
-
-  return (
-    <div className={`rounded-xl border bg-white shadow-sm ${borderClass} ${className}`}>
-      <div className={`border-b px-5 py-3.5 ${headerBorderClass}`}>
-        <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-800">
-          {title}
-        </h2>
-        <p className="mt-0.5 text-xs text-zinc-400">{guide}</p>
-      </div>
-      <div className="px-5 py-4">{children}</div>
-    </div>
-  );
 }
 
 // ─── Quick Dismiss (hero — first thing reps see) ──────────────
@@ -101,67 +63,6 @@ function QuickDismissSection({
         </p>
       )}
     </SectionCard>
-  );
-}
-
-// ─── Reframe Card ─────────────────────────────────────────────
-
-function ReframeCard({
-  reframe,
-  index,
-}: {
-  reframe: BattlecardDetailType["reframes"][number];
-  index: number;
-}) {
-  return (
-    <div className="rounded-lg border border-zinc-100 bg-zinc-50/50 p-4 space-y-3">
-      <div className="flex items-center gap-2">
-        <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-zinc-200 text-[10px] font-bold text-zinc-600">
-          {index + 1}
-        </span>
-        <span className="text-xs font-medium uppercase tracking-wider text-zinc-400">
-          When they say
-        </span>
-        <EvidenceTierBadge tier={reframe.evidenceTier} />
-      </div>
-      <p className="text-sm text-zinc-600 leading-relaxed">{reframe.weakness}</p>
-
-      <div className="rounded-lg bg-white border border-emerald-200/60 p-3.5">
-        <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 mb-1 block">
-          Say this
-        </span>
-        <p className="text-sm font-medium text-zinc-900 leading-relaxed">
-          {reframe.reframe}
-        </p>
-      </div>
-
-      {reframe.antiReframe && (
-        <div className="rounded-lg border border-amber-200/60 bg-amber-50/50 p-3">
-          <span className="text-xs font-semibold uppercase tracking-wider text-amber-700 mb-1 block">
-            Don&apos;t say
-          </span>
-          <p className="text-sm text-amber-800 leading-relaxed">
-            {reframe.antiReframe}
-          </p>
-        </div>
-      )}
-
-      {reframe.sources.length > 0 && (
-        <div className="flex flex-wrap gap-2 pt-1">
-          {reframe.sources.map((url) => (
-            <a
-              key={url}
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-xs text-finmo-600 hover:text-finmo-700 underline underline-offset-2"
-            >
-              Source
-            </a>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

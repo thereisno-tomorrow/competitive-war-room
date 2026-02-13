@@ -1,5 +1,5 @@
 import type { IntelligenceItem, PositioningClaim, Competitor } from "@/generated/prisma/client";
-import { FINMO_STRATEGIC_CONTEXT, SYNTHESIS_RUBRIC } from "@/lib/llm/context";
+import { FINMO_STRATEGIC_CONTEXT, FINMO_EXTENDED_CONTEXT, SYNTHESIS_RUBRIC } from "@/lib/llm/context";
 
 interface WeeklyPulsePromptContext {
   claims: PositioningClaim[];
@@ -26,6 +26,8 @@ export function buildWeeklyPulsePrompt(ctx: WeeklyPulsePromptContext): string {
 ${FINMO_STRATEGIC_CONTEXT}
 
 ${SYNTHESIS_RUBRIC}
+
+${FINMO_EXTENDED_CONTEXT}
 
 FINMO'S THREE POSITIONING CLAIMS (current status):
 ${claimsList}

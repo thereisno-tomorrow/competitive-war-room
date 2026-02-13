@@ -5,192 +5,14 @@ import { AlertCard } from "@/components/pulse/alert-card";
 import { EvidenceTierBadge } from "@/components/shared/evidence-tier-badge";
 import { ClaimStatusIndicator } from "@/components/shared/claim-status-indicator";
 import { Badge } from "@/components/ui/badge";
+import { SectionCard as DashboardCard } from "@/components/shared/section-card";
 import type { DashboardResponse } from "@/types";
 import type { ClaimStatus } from "@/generated/prisma/client";
 
-// ─── Prose Formatter ───────────────────────────────────────────
+// ─── Text Renderers ───────────────────────────────────────────
 
-function FormattedProse({ text }: { text: string }) {
-  // Split on sentence boundaries, detect "Overall:" as summary
-  const sentences = text
-    .split(/(?<=\.)\s+/)
-    .filter((s) => s.trim().length > 0);
-
-  const summaryIdx = sentences.findIndex((s) =>
-    /^overall[:\s]/i.test(s.trim())
-  );
-  const bullets = summaryIdx >= 0 ? sentences.slice(0, summaryIdx) : sentences;
-  const summary = summaryIdx >= 0 ? sentences.slice(summaryIdx).join(" ") : null;
-
-  return (
-    <div className="space-y-3">
-      <ul className="space-y-2">
-        {bullets.map((sentence, i) => (
-          <li
-            key={i}
-            className="flex items-start gap-2.5 text-sm text-zinc-700 leading-relaxed"
-          >
-            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-zinc-300" />
-            {sentence.trim()}
-          </li>
-        ))}
-      </ul>
-      {summary && (
-        <div className="rounded-lg border border-finmo-200/50 bg-finmo-50/50 px-3.5 py-2.5">
-          <p className="text-sm font-medium text-zinc-800 leading-relaxed">
-            {summary}
-          </p>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Assessment Formatter (for Positioning Confidence table) ──
-
-function FormattedAssessment({ text }: { text: string }) {
-  // Convert ALL CAPS values to sentence case
-  const toSentenceCase = (str: string) => {
-    if (str === str.toUpperCase() && str.length > 1) {
-      return str.charAt(0) + str.slice(1).toLowerCase();
-    }
-    return str;
-  };
-
-  // Split on known labels
-  const labelPattern =
-    /(?=CONFIDENCE:|Evidence (?:FOR|AGAINST):|Action (?:implication|Implication):|Critical gap:|Suggestion:)/gi;
-  const segments = text.split(labelPattern).filter((s) => s.trim().length > 0);
-
-  const hasLabel = /CONFIDENCE:|Evidence (?:FOR|AGAINST):|Action (?:implication|Implication):|Critical gap:|Suggestion:/i.test(text);
-
-  if (!hasLabel) {
-    // No structured labels — fall back to sentence splitting
-    const sentences = text
-      .split(/(?<=\.)\s+/)
-      .filter((s) => s.trim().length > 0);
-    return (
-      <ul className="space-y-0.5 list-disc list-inside">
-        {sentences.map((s, i) => (
-          <li key={i} className="text-sm text-zinc-600 leading-relaxed">
-            {toSentenceCase(s.trim())}
-          </li>
-        ))}
-      </ul>
-    );
-  }
-
-  // Parse each labeled segment
-  const parsed = segments.map((segment) => {
-    const colonIdx = segment.indexOf(":");
-    if (colonIdx === -1) return null;
-    const label = segment.slice(0, colonIdx).trim();
-    const value = segment.slice(colonIdx + 1).trim();
-    if (!value) return null;
-    return { label, value };
-  }).filter(Boolean) as { label: string; value: string }[];
-
-  // For single-label assessments (e.g. only CONFIDENCE: followed by plain text),
-  // split the confidence value from the rest of the sentences
-  if (parsed.length === 1 && /^confidence$/i.test(parsed[0]!.label)) {
-    const sentences = parsed[0]!.value
-      .split(/(?<=\.)\s+/)
-      .filter((s) => s.trim().length > 0);
-    const confidenceValue = sentences[0] || "";
-    const details = sentences.slice(1);
-
-    return (
-      <dl className="space-y-3">
-        <div>
-          <dt className="text-xs font-bold uppercase tracking-wider text-zinc-800 mb-0.5">
-            Confidence
-          </dt>
-          <dd className="text-sm text-zinc-600 leading-relaxed">
-            {toSentenceCase(confidenceValue.trim())}
-          </dd>
-        </div>
-        {details.length > 0 && (
-          <div>
-            <dt className="text-xs font-bold uppercase tracking-wider text-zinc-800 mb-0.5">
-              Details
-            </dt>
-            <dd>
-              <ul className="space-y-0.5 list-disc list-inside">
-                {details.map((s, i) => (
-                  <li key={i} className="text-sm text-zinc-600 leading-relaxed">
-                    {s.trim()}
-                  </li>
-                ))}
-              </ul>
-            </dd>
-          </div>
-        )}
-      </dl>
-    );
-  }
-
-  return (
-    <dl className="space-y-3">
-      {parsed.map((item, i) => {
-        const points = item.value
-          .split(/(?<=\.)\s+/)
-          .map((s) => toSentenceCase(s.trim()))
-          .filter((s) => s.length > 0);
-
-        return (
-          <div key={i}>
-            <dt className="text-xs font-bold uppercase tracking-wider text-zinc-800 mb-0.5">
-              {item.label}
-            </dt>
-            <dd>
-              {points.length === 1 ? (
-                <p className="text-sm text-zinc-600 leading-relaxed">
-                  {points[0]?.trim()}
-                </p>
-              ) : (
-                <ul className="space-y-0.5 list-disc list-inside">
-                  {points.map((pt, j) => (
-                    <li
-                      key={j}
-                      className="text-sm text-zinc-600 leading-relaxed"
-                    >
-                      {pt.trim()}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </dd>
-          </div>
-        );
-      })}
-    </dl>
-  );
-}
-
-// ─── Dashboard Shell ───────────────────────────────────────────
-
-function DashboardCard({
-  title,
-  guide,
-  children,
-  className = "",
-}: {
-  title: string;
-  guide: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`rounded-xl border border-zinc-200/80 bg-white shadow-sm ${className}`}>
-      <div className="border-b border-zinc-100 px-5 py-3.5">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-800">
-          {title}
-        </h2>
-        <p className="mt-0.5 text-xs text-zinc-400">{guide}</p>
-      </div>
-      <div className="px-5 py-4">{children}</div>
-    </div>
-  );
+function ProseBlock({ text }: { text: string }) {
+  return <p className="text-sm text-zinc-700 leading-relaxed">{text}</p>;
 }
 
 function SectionEmpty({ text }: { text: string }) {
@@ -349,7 +171,7 @@ function UnifiedDashboard({ data }: { data: DashboardResponse }) {
             guide="Overall market dynamics and consolidation trends"
           >
             {categoryHealth ? (
-              <FormattedProse text={categoryHealth} />
+              <ProseBlock text={categoryHealth} />
             ) : (
               <SectionEmpty text="No category assessment yet. Available after the first monthly pulse." />
             )}
@@ -409,7 +231,7 @@ function UnifiedDashboard({ data }: { data: DashboardResponse }) {
                       {claim.evidenceAgainstCount}
                     </td>
                     <td className="py-3 pl-4 align-top">
-                      <FormattedAssessment text={claim.assessment} />
+                      <p className="text-sm text-zinc-600 leading-relaxed">{claim.assessment}</p>
                     </td>
                   </tr>
                 ))}

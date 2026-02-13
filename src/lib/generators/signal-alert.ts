@@ -38,9 +38,7 @@ export async function generateSignalAlert(
   });
 
   if (existingAlerts.length > 0) {
-    const existing = existingAlerts[0];
-    // TypeScript strict index guard — length > 0 guarantees this exists
-    if (!existing) throw new Error("Unexpected empty existing alerts array");
+    const existing = existingAlerts[0]!;
     return {
       id: existing.id,
       headline: existing.headline,
@@ -63,8 +61,9 @@ export async function generateSignalAlert(
   });
 
   let content: SignalAlertContent | null = null;
-  let validationStatus: GenerationResult["validationStatus"] = "PASSED";
+  let validationStatus: GenerationResult["validationStatus"] = "REJECTED";
   let attempts = 0;
+  let lastErrors: string[] = [];
 
   while (attempts < OUTPUT_LIMITS.MAX_REGENERATION_ATTEMPTS) {
     attempts++;
@@ -78,21 +77,19 @@ export async function generateSignalAlert(
       validationStatus = attempts > 1 ? "REGENERATED" : "PASSED";
       break;
     }
+    lastErrors = validation.errors;
+  }
 
-    if (attempts >= OUTPUT_LIMITS.MAX_REGENERATION_ATTEMPTS) {
-      validationStatus = "REJECTED";
-      console.error(
-        `Signal alert rejected after ${attempts} attempts:`,
-        validation.errors,
-      );
-    }
+  if (validationStatus === "REJECTED") {
+    console.error(`Signal alert rejected after ${attempts} attempts:`, lastErrors);
   }
 
   if (!content) throw new Error("Failed to generate signal alert content");
 
   const headline = `${item.competitor.name}: ${content.sections.whatHappened.slice(0, 80)}`;
 
-  const wordCount = JSON.stringify(content).split(/\s+/).length;
+  const contentJson = JSON.stringify(content);
+  const wordCount = contentJson.split(/\s+/).length;
 
   const now = new Date();
 
@@ -100,7 +97,7 @@ export async function generateSignalAlert(
     data: {
       type: "SIGNAL_ALERT",
       headline,
-      content: JSON.parse(JSON.stringify(content)),
+      content: JSON.parse(contentJson),
       wordCount,
       validationStatus,
       generationMetadata: {

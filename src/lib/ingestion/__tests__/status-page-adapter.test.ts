@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { DataSource } from "@/generated/prisma/client";
-import { StatusPageAdapter } from "../adapters/status-page";
+import { StatusPageAdapter } from "../adapters/html-page";
 import { hashContent } from "../diff-engine";
 
 const mockDataSource: DataSource = {

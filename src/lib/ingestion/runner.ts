@@ -71,9 +71,6 @@ export interface IngestionRunStats {
   errors: Array<{ sourceId: string; error: string }>;
 }
 
-// Backward compat: keep the old shape as an alias
-export type IngestionResult = IngestionRunStats;
-
 type SourceRow = Awaited<ReturnType<typeof prisma.dataSource.findMany>>[number] & {
   competitor: { name: string };
 };

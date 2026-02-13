@@ -5,14 +5,7 @@ import Link from "next/link";
 import Markdown from "react-markdown";
 import { useContentDraft } from "@/lib/hooks/use-content-drafts";
 import { Badge } from "@/components/ui/badge";
-
-// ─── Constants ──────────────────────────────────────────────
-
-const segmentLabels: Record<string, string> = {
-  STARTUP: "Startup",
-  MSME: "MSME",
-  MID_MARKET: "Mid-Market",
-};
+import { segmentLabels } from "@/lib/constants/content";
 
 // ─── Loading / Error ────────────────────────────────────────
 

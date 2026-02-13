@@ -6,13 +6,7 @@ import { generateWeeklyPulse } from "@/lib/generators/weekly-pulse";
 import { generateMonthlyPulse } from "@/lib/generators/monthly-pulse";
 import { ClaudeProvider } from "@/lib/llm/claude";
 import { SCHEDULE } from "@/lib/config/thresholds";
-
-function validateCronSecret(request: NextRequest): boolean {
-  const authHeader = request.headers.get("authorization");
-  if (!authHeader) return false;
-  const token = authHeader.replace("Bearer ", "");
-  return token === process.env.CRON_SECRET;
-}
+import { validateCronSecret } from "@/lib/auth";
 
 /** Get current date in SGT (UTC+8) */
 function getSGTDate(): Date {

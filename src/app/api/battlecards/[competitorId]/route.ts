@@ -19,7 +19,18 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ competitorId: string }> },
 ) {
-  const { competitorId } = await params;
+  const { competitorId: idOrName } = await params;
+
+  // Support lookup by competitor name (case-insensitive) as well as ID
+  let competitorId = idOrName;
+  if (!idOrName.startsWith("c") || idOrName.length < 20) {
+    // Looks like a name slug, not a CUID — resolve to ID
+    const competitor = await prisma.competitor.findFirst({
+      where: { name: { equals: idOrName, mode: "insensitive" } },
+      select: { id: true },
+    });
+    if (competitor) competitorId = competitor.id;
+  }
 
   const battlecard = await prisma.battlecard.findUnique({
     where: { competitorId },

@@ -33,8 +33,6 @@ import { IngestionRunner } from "../runner";
 
 function createMockLLM(overrides?: Partial<LLMProvider>): LLMProvider {
   return {
-    synthesize: vi.fn().mockResolvedValue(""),
-    classify: vi.fn().mockResolvedValue("PRESS"),
     classifyStructured: vi.fn().mockResolvedValue({
       type: "PRODUCT_CHANGE",
       summary: "Competitor updated their product page",

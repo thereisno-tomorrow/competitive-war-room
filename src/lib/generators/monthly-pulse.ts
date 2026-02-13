@@ -37,8 +37,9 @@ export async function generateMonthlyPulse(
   });
 
   let content: MonthlyPulseContent | null = null;
-  let validationStatus: GenerationResult["validationStatus"] = "PASSED";
+  let validationStatus: GenerationResult["validationStatus"] = "REJECTED";
   let attempts = 0;
+  let lastErrors: string[] = [];
 
   while (attempts < OUTPUT_LIMITS.MAX_REGENERATION_ATTEMPTS) {
     attempts++;
@@ -52,14 +53,11 @@ export async function generateMonthlyPulse(
       validationStatus = attempts > 1 ? "REGENERATED" : "PASSED";
       break;
     }
+    lastErrors = validation.errors;
+  }
 
-    if (attempts >= OUTPUT_LIMITS.MAX_REGENERATION_ATTEMPTS) {
-      validationStatus = "REJECTED";
-      console.error(
-        `Monthly pulse rejected after ${attempts} attempts:`,
-        validation.errors,
-      );
-    }
+  if (validationStatus === "REJECTED") {
+    console.error(`Monthly pulse rejected after ${attempts} attempts:`, lastErrors);
   }
 
   if (!content) throw new Error("Failed to generate monthly pulse content");
@@ -75,13 +73,14 @@ export async function generateMonthlyPulse(
         ? `${claimsUnderPressure.length} positioning claim${claimsUnderPressure.length !== 1 ? "s" : ""} under pressure — ${items.length} signals this month`
         : `${items.length} signal${items.length !== 1 ? "s" : ""} tracked this month — positioning stable`;
 
-  const wordCount = JSON.stringify(content).split(/\s+/).length;
+  const contentJson = JSON.stringify(content);
+  const wordCount = contentJson.split(/\s+/).length;
 
   const output = await prisma.generatedOutput.create({
     data: {
       type: "MONTHLY_PULSE",
       headline,
-      content: JSON.parse(JSON.stringify(content)),
+      content: JSON.parse(contentJson),
       wordCount,
       validationStatus,
       generationMetadata: { attempts, generatedAt: now.toISOString() },

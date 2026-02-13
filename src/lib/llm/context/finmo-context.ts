@@ -5,8 +5,8 @@
  * competitive intelligence analyst. Without it, the LLM produces competent
  * summaries. With it, the LLM produces intelligence.
  *
- * Keep this under ~2,500 tokens. Every word here costs tokens on every call.
- * Earn every sentence.
+ * Keep this under ~2,800 tokens. Every word here costs tokens on every call.
+ * Earn every sentence. Use compressed shorthand: [C]=Confirmed, [I]=Inferred, [U]=Unknown.
  */
 
 export const FINMO_STRATEGIC_CONTEXT = `
@@ -24,7 +24,13 @@ PRODUCT CAPABILITIES
 - AR/AP automation: Automated workflows with reconciliation
 - FX management: Automated hedging, competitive rates, exposure analysis
 - Working capital: Idle cash investment, liquidity optimization
-- MO AI (launched June 2025): Conversational AI co-pilot — not a dashboard, but an intelligence layer that surfaces anomalies, triggers alerts, delivers proactive insights. Mansi describes it as "an autonomous finance partner." Built on domain-specific models trained on real financial data.
+- MO AI (June 2025): NL treasury co-pilot via "Ask AI" in dashboard.
+  Does: cash position queries, payment analysis, report generation, tx authorization, reconciliation — plain English, no dashboard navigation.
+  Built on: domain-specific models trained on real financial tx data + Finmo's Model Context Protocol.
+  For: non-treasury users (controllers, multi-hat CFOs). No treasury training needed.
+  vs Kyriba TAI: enterprise/audit-focused, for dedicated treasury teams. MO AI = NL-first for small teams.
+  vs HighRadius: O2C + forecast accuracy metrics. MO AI = full-workflow co-pilot.
+  Unproven: no published accuracy metrics, no 3rd-party validation. [PLACEHOLDER: update when available]
 
 LICENSING MOAT
 Licensed in 7+ jurisdictions: Singapore (MAS MPI), Australia (ASIC), New Zealand, Canada, US, UK (EMI, July 2025), Dubai pending (DFSA). Each license is expensive and time-consuming to obtain. This is a genuine competitive moat.
@@ -35,6 +41,27 @@ KEY PARTNERSHIPS
 - Fiskil: Australian open banking
 - Tribe Payments: Europe-Asia card infrastructure bridge
 
+FINMO'S HONEST POSITION:
+Strong [C]:
+- Time to value: 4-6 weeks vs Kyriba 6-12mo (buyer-confirmed)
+- Pricing: ~$45K/yr vs Kyriba $230K+ yr-1 TCO
+- UX: "Controller needs to use this without a PhD" — Finmo wins
+- Unified treasury+payments: no mid-market equivalent (Claim #1 holding)
+- Licensing: 7+ jurisdictions, 18-24mo each to replicate
+
+Weak [C unless noted]:
+- Brand: founded 2021, ~$3.8M ARR, no Gartner/Forrester. Board-level risk.
+- Track record: lost pharma deal — "can't afford to be early adopters." No industry proof points.
+- No hedge accounting, IFRS 9, intercompany netting, complex scenario modeling
+- Bank connectivity: 2K integrations vs Kyriba 9.9K
+- FX: "Unfunded Spot" still beta
+- MO AI: no published metrics, no independent reviews [U — PLACEHOLDER]
+- SAP depth: less than Kyriba (6-8 weeks but comprehensive)
+- G2/Capterra: minimal review presence
+- [PLACEHOLDER: win/loss data — update when interviews begin]
+
+Analytical rule: threats targeting Finmo's WEAK areas are more urgent than threats targeting STRONG areas.
+
 THREE POSITIONING CLAIMS (the system's analytical spine)
 1. "Only mid-market accessible platform combining full treasury + payments"
    Threats: Airwallex adding treasury. Trovata adding payments. Kyriba moving downmarket.
@@ -43,18 +70,14 @@ THREE POSITIONING CLAIMS (the system's analytical spine)
 3. "Multi-jurisdiction licensing as compliance moat"
    Threats: Airwallex expanding licensing overlap. Any competitor gaining MAS/ASIC/FCA licenses.
 
-THE BUYER
-Mid-market CFOs and finance leaders managing multi-entity, multi-currency operations. They:
-- Currently use fragmented tools (spreadsheets, bank portals, maybe a legacy TMS that's overbuilt for them)
-- Think in terms of risk, resilience, credibility, and foresight — NOT features
-- Are evolving from controllers to opportunity creators, but their tools haven't kept up
-- Face fragmentation that "locks liquidity, delays decisions, and forces reactive manual work"
-- The most common "competitor" is the status quo: spreadsheets + bank portals
+TARGET SEGMENTS:
+Startup   | 1-50 emp  | <$10M rev  | CEO buys       | self-serve  | <$10K ACV
+MSME      | 50-200    | $10-50M    | Controller buys | hybrid      | $10-30K ACV
+Mid-mkt   | 200-2K    | $50-500M   | CFO + 1-5 team | enterprise  | $30-80K ACV
+Enterprise| 2K+       | $500M+     | NOT FINMO'S TARGET → Kyriba's territory
 
-Three segments with different buying dynamics:
-- Startups: CEO-led, self-serve, speed matters most
-- MSMEs: Controller-led, starting to feel pain, need guidance
-- Mid-market: CFO/treasury teams, enterprise sales, need confidence in vendor stability
+"Mid-market accessible" (Claim #1) = deployable by 1-5 person team without treasury analysts, weeks not months, <$100K/yr TCO.
+Most common competitor across all segments: status quo (spreadsheets + bank portals). → see STATUS_QUO profile
 
 CMO: MANSI CHOPRA (the intelligence consumer)
 Joined Jan 2026. 14+ years fintech marketing (Nium, Thunes, Ant International).
@@ -67,12 +90,16 @@ Joined Jan 2026. 14+ years fintech marketing (Nium, Thunes, Ant International).
 - Anti-sameness: "When brands default to sameness, they are choosing invisibility"
 Her test: "Does this reflect how a modern CFO actually experiences their role?"
 
-CRITICAL EVIDENCE GAPS (what we don't yet know)
-1. Which specific competitor weakness is most decisive in mid-market deals
+EVIDENCE GAPS:
+[PLACEHOLDER: WIN/LOSS] No structured data. Reframes are logical but untested. Target: 5 interviews/mo.
+[PLACEHOLDER: MO AI METRICS] No accuracy/adoption data. Cannot quantitatively defend Claim #2.
+[PLACEHOLDER: PARTNERSHIPS] Defensibility unknown. Are any exclusive? Do competitors have equivalents?
+
+Open questions (buyer validation needed):
+1. Which competitor weakness is most decisive in mid-market deals
 2. How often buyers evaluate Airwallex alongside Finmo
-3. What language mid-market CFOs use to describe the treasury problem
-4. Which Finmo capability is the primary purchase driver by segment
-5. Whether buyers recognize "Treasury Operating System" as a meaningful category
-6. Finmo's actual competitive set by segment (startups may face Airwallex; mid-market may face Kyriba)
-These gaps can only be closed through buyer conversations. Until then, competitive reframes are logical but untested.
+3. What language CFOs use to describe the treasury problem
+4. Primary purchase driver by segment
+5. Whether buyers recognize "Treasury Operating System" as category
+6. Actual competitive set by segment
 `.trim();

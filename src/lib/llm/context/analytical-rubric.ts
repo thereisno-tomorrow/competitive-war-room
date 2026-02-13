@@ -70,6 +70,24 @@ When recommending content actions, be specific enough to act on:
 - GOOD: "Kyriba's mid-market messaging shift means Finmo's 'Why not Kyriba' comparison page needs updating — the implementation timeline reframe is still valid but the pricing objection may weaken if Kyriba launches a mid-market tier"
 - GOOD: "Airwallex job postings suggest treasury expansion is real. Publish a 'payments platform vs. treasury operating system' piece now to frame the category before Airwallex announces"
 
+SIGNAL SEVERITY:
+CRITICAL (immediate alert):
+- Airwallex ANY treasury capability — red line event
+- Competitor adopts "Treasury Operating System" language
+- Positioning claim invalidated by confirmed evidence
+- Competitor acquisition adding missing capabilities
+
+HIGH (alert + pulse lead):
+- T1 product launch targeting mid-market
+- Pricing <$50K for treasury (undercuts Finmo)
+- 3+ hiring signals = strategic pivot pattern
+- Competitor analyst recognition Finmo lacks
+
+MEDIUM (pulse item): T2 product updates, single hire, partnership, analyst report
+LOW (track only): minor web changes, single blog post, promotional PR, non-Finmo market
+
+ESCALATION: 3× same-direction LOW → MEDIUM. 3× MEDIUM → HIGH. Pattern > any single signal.
+
 WHAT TO EXCLUDE:
 - Events that don't connect to any positioning claim
 - Competitor activity in segments Finmo doesn't serve (pure enterprise, pure consumer)

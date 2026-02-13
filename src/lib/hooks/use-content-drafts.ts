@@ -63,21 +63,3 @@ export function useGenerateDraft() {
   });
 }
 
-export function useUpdateDraftStatus(id: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (status: string) => {
-      const res = await fetch(`/api/content/drafts/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) throw new Error("Failed to update draft status");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["content", "drafts", id] });
-    },
-  });
-}

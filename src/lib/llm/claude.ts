@@ -14,6 +14,14 @@ function extractText(content: ContentBlock[], fallback: string = ""): string {
   return fallback;
 }
 
+/** Strip markdown code fences that LLMs sometimes wrap around JSON output. */
+function stripFences(text: string): string {
+  return text
+    .replace(/^```(?:json)?\s*\n?/m, "")
+    .replace(/\n?```\s*$/m, "")
+    .trim();
+}
+
 export class ClaudeProvider implements LLMProvider {
   private client: Anthropic;
 
@@ -45,21 +53,6 @@ export class ClaudeProvider implements LLMProvider {
     return extractText(response.content);
   }
 
-  async classify(content: string, categories: string[]): Promise<string> {
-    const response = await this.client.messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: 256,
-      messages: [
-        {
-          role: "user",
-          content: `Classify the following into exactly one category.\n\nContent: ${content}\nCategories: ${categories.join(", ")}\n\nRespond with only the category name.`,
-        },
-      ],
-    });
-
-    return extractText(response.content).trim();
-  }
-
   async classifyStructured<T>(prompt: string): Promise<T> {
     const response = await this.client.messages.create({
       model: SONNET_MODEL,
@@ -73,11 +66,7 @@ export class ClaudeProvider implements LLMProvider {
     });
 
     const text = extractText(response.content, "{}");
-    const cleaned = text
-      .replace(/^```(?:json)?\s*\n?/m, "")
-      .replace(/\n?```\s*$/m, "")
-      .trim();
-    return JSON.parse(cleaned) as T;
+    return JSON.parse(stripFences(text)) as T;
   }
 
   async generateStructured<T>(prompt: string, context: Record<string, unknown>, options?: { fast?: boolean }): Promise<T> {
@@ -97,12 +86,6 @@ export class ClaudeProvider implements LLMProvider {
     });
 
     const text = extractText(response.content, "{}");
-
-    // Strip potential markdown code fences
-    const cleaned = text
-      .replace(/^```(?:json)?\s*\n?/m, "")
-      .replace(/\n?```\s*$/m, "")
-      .trim();
-    return JSON.parse(cleaned) as T;
+    return JSON.parse(stripFences(text)) as T;
   }
 }

@@ -16,20 +16,14 @@ vi.mock("@/lib/ingestion/runner", () => ({
   },
 }));
 
-vi.mock("@/lib/ingestion/adapters/website", () => ({
+vi.mock("@/lib/ingestion/adapters/html-page", () => ({
   WebsiteAdapter: vi.fn(),
-}));
-
-vi.mock("@/lib/ingestion/adapters/changelog", () => ({
   ChangelogAdapter: vi.fn(),
+  StatusPageAdapter: vi.fn(),
 }));
 
 vi.mock("@/lib/ingestion/adapters/rss", () => ({
   RssAdapter: vi.fn(),
-}));
-
-vi.mock("@/lib/ingestion/adapters/status-page", () => ({
-  StatusPageAdapter: vi.fn(),
 }));
 
 vi.mock("@/lib/ingestion/adapters/linkedin", () => ({

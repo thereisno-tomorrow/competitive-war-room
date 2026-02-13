@@ -6,7 +6,7 @@ export async function GET() {
     include: {
       competitor: {
         include: {
-          reframes: true,
+          _count: { select: { reframes: true } },
         },
       },
     },
@@ -19,7 +19,7 @@ export async function GET() {
       competitorName: bc.competitor.name,
       tier: bc.competitor.tier,
       lastUpdated: bc.updatedAt.toISOString(),
-      reframeCount: bc.competitor.reframes.length,
+      reframeCount: bc.competitor._count.reframes,
     })),
   );
 }

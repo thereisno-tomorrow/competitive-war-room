@@ -1,5 +1,5 @@
 import type { IntelligenceItem, PositioningClaim, Competitor } from "@/generated/prisma/client";
-import { FINMO_STRATEGIC_CONTEXT, getAllCompetitorProfiles, SYNTHESIS_RUBRIC } from "@/lib/llm/context";
+import { FINMO_STRATEGIC_CONTEXT, FINMO_EXTENDED_CONTEXT, getAllCompetitorProfiles, SYNTHESIS_RUBRIC } from "@/lib/llm/context";
 
 interface MonthlyPulsePromptContext {
   claims: PositioningClaim[];
@@ -35,6 +35,8 @@ COMPETITIVE LANDSCAPE (threat models for all tracked competitors):
 ${getAllCompetitorProfiles()}
 
 ${SYNTHESIS_RUBRIC}
+
+${FINMO_EXTENDED_CONTEXT}
 
 FINMO'S THREE POSITIONING CLAIMS (current status):
 ${claimsList}

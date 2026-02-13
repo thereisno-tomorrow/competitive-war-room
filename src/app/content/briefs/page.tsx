@@ -3,30 +3,11 @@
 import Link from "next/link";
 import { useContentBriefs, useGenerateBriefs } from "@/lib/hooks/use-content-briefs";
 import { Badge } from "@/components/ui/badge";
-
-// ─── Badge Helpers ──────────────────────────────────────────
-
-const bucketLabels: Record<string, string> = {
-  INTELLIGENCE_DRIVEN: "Intel-Driven",
-  PRODUCT_DRIVEN: "Product",
-  BUYER_JOURNEY: "Buyer Journey",
-  CATEGORY_CREATION: "Category",
-};
-
-const bucketColors: Record<string, string> = {
-  INTELLIGENCE_DRIVEN: "bg-blue-100 text-blue-800",
-  PRODUCT_DRIVEN: "bg-emerald-100 text-emerald-800",
-  BUYER_JOURNEY: "bg-amber-100 text-amber-800",
-  CATEGORY_CREATION: "bg-purple-100 text-purple-800",
-};
-
-const funnelLabels: Record<string, string> = {
-  AWARENESS: "Awareness",
-  ACQUISITION: "Acquisition",
-  ACTIVATION: "Activation",
-  RETENTION: "Retention",
-  EXPANSION: "Expansion",
-};
+import {
+  bucketLabelsShort as bucketLabels,
+  bucketColors,
+  funnelLabels,
+} from "@/lib/constants/content";
 
 // ─── Brief Card ─────────────────────────────────────────────
 

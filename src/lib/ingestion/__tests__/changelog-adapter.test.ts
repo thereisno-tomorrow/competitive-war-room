@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { DataSource } from "@/generated/prisma/client";
-import { ChangelogAdapter } from "../adapters/changelog";
+import { ChangelogAdapter } from "../adapters/html-page";
 import { hashContent } from "../diff-engine";
 
 const mockDataSource: DataSource = {

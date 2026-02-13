@@ -193,6 +193,37 @@ SIGNALS THAT MATTER:
 - Press/analyst coverage positioning them as Kyriba alternative
 `.trim();
 
+const STATUS_QUO_PROFILE = `
+COMPETITOR: STATUS QUO — Spreadsheets + Bank Portals
+Threatens Claims: #1 (delays platform adoption), all claims (prevents evaluation entirely)
+Most frequent competitive loss across all segments. Not a company — inertia.
+
+THE THREAT: Switching feels riskier than staying. Status quo has zero sales team, zero budget, wins by default.
+
+WHAT IT LOOKS LIKE [C, buyer-stated]:
+- 3-5 bank portals daily + copy/paste to spreadsheet
+- "Two hours every morning just reconciling" (MSME)
+- "I built this spreadsheet three years ago — I'm the only one who understands it" (single point of failure)
+- Cash position 6+ hours stale by time CFO sees it
+- "I don't want some tech platform that requires me to learn a whole new way"
+
+WHY IT PERSISTS:
+- Sunk cost ("three years of workflows"), familiarity, invisible distributed pain, "good enough" inertia
+
+WHAT BREAKS IT [C, from buyer decisions]:
+- Board asks for consolidated view controller can't deliver
+- Audit findings on intercompany reporting
+- FX loss (one case: $12K single conversion)
+- Near-miss on payroll/supplier payment
+- CEO embarrassment at board level
+
+SIGNALS TO WATCH:
+- Banks improving portal analytics or multi-entity views
+- Treasury Excel add-ins gaining traction
+- "Do you really need a TMS?" narrative in press
+- Budget freezes (delay = status quo win)
+`.trim();
+
 export const COMPETITOR_PROFILES: Record<string, string> = {
   Kyriba: KYRIBA_PROFILE,
   Airwallex: AIRWALLEX_PROFILE,
@@ -200,6 +231,7 @@ export const COMPETITOR_PROFILES: Record<string, string> = {
   Nium: NIUM_PROFILE,
   HighRadius: HIGHRADIUS_PROFILE,
   GTreasury: GTREASURY_PROFILE,
+  "Status Quo": STATUS_QUO_PROFILE,
 };
 
 /**

@@ -60,8 +60,6 @@ export const INGESTION = {
 // ---------------------------------------------------------------------------
 
 export const DEDUP = {
-  /** Same fingerprint + competitor within this window = duplicate */
-  EVENT_FINGERPRINT_WINDOW_DAYS: 7,
   /** Ignore words shorter than this in fingerprint generation */
   MIN_WORD_LENGTH: 4,
   /** Number of significant words to include in fingerprint */
@@ -80,6 +78,28 @@ export const ALERT_THRESHOLDS = {
   outage: true,
   negativePressEvent: true,
   treasuryOSLanguageDetected: true,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Signal severity scoring (supplements binary ALERT_THRESHOLDS)
+// ---------------------------------------------------------------------------
+
+/** Numeric scoring for graduated signal severity.
+ *  Score = signalType[type] × competitorTier[tier] + modifiers.
+ *  Compare against thresholds to determine severity level. */
+export const SIGNAL_WEIGHTS = {
+  competitorTier: { TIER_1: 3, TIER_2: 1 },
+  signalType: {
+    PRODUCT_CHANGE: 30, PRICING_CHANGE: 25, HIRING_SIGNAL: 15,
+    PARTNERSHIP: 20, MESSAGING_SHIFT: 20, OUTAGE: 10,
+    PRESS: 10, REVIEW: 15, SEO_CHANGE: 10, REGULATORY: 20,
+  },
+  affectsPositioningClaim: 20,
+  treasuryOSLanguage: 30,
+  inFinmoMarket: 15,
+  criticalThreshold: 80,
+  highThreshold: 50,
+  mediumThreshold: 25,
 } as const;
 
 export const OUTPUT_LIMITS = {

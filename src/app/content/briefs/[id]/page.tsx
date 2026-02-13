@@ -5,80 +5,14 @@ import Link from "next/link";
 import { useContentBrief } from "@/lib/hooks/use-content-briefs";
 import { useGenerateDraft } from "@/lib/hooks/use-content-drafts";
 import { Badge } from "@/components/ui/badge";
-
-// ─── Constants ──────────────────────────────────────────────
-
-const bucketLabels: Record<string, string> = {
-  INTELLIGENCE_DRIVEN: "Intelligence-Driven",
-  PRODUCT_DRIVEN: "Product-Driven",
-  BUYER_JOURNEY: "Buyer Journey",
-  CATEGORY_CREATION: "Category Creation",
-};
-
-const bucketColors: Record<string, string> = {
-  INTELLIGENCE_DRIVEN: "bg-blue-100 text-blue-800",
-  PRODUCT_DRIVEN: "bg-emerald-100 text-emerald-800",
-  BUYER_JOURNEY: "bg-amber-100 text-amber-800",
-  CATEGORY_CREATION: "bg-purple-100 text-purple-800",
-};
-
-const funnelLabels: Record<string, string> = {
-  AWARENESS: "Awareness",
-  ACQUISITION: "Acquisition",
-  ACTIVATION: "Activation",
-  RETENTION: "Retention",
-  EXPANSION: "Expansion",
-};
-
-const segmentLabels: Record<string, string> = {
-  STARTUP: "Startup",
-  MSME: "MSME",
-  MID_MARKET: "Mid-Market",
-};
-
-const segmentColors: Record<string, { border: string; header: string; accent: string }> = {
-  STARTUP: {
-    border: "border-blue-200/80",
-    header: "border-blue-100",
-    accent: "bg-blue-50 text-blue-700",
-  },
-  MSME: {
-    border: "border-amber-200/80",
-    header: "border-amber-100",
-    accent: "bg-amber-50 text-amber-700",
-  },
-  MID_MARKET: {
-    border: "border-emerald-200/80",
-    header: "border-emerald-100",
-    accent: "bg-emerald-50 text-emerald-700",
-  },
-};
-
-// ─── SectionCard ────────────────────────────────────────────
-
-function SectionCard({
-  title,
-  guide,
-  children,
-  className = "",
-}: {
-  title: string;
-  guide: string;
-  children: React.ReactNode;
-  className?: string;
-}) {
-  return (
-    <div className={`rounded-xl border border-zinc-200/80 bg-white shadow-sm ${className}`}>
-      <div className="border-b border-zinc-100 px-5 py-3.5">
-        <h2 className="text-sm font-bold uppercase tracking-wider text-zinc-800">
-          {title}
-        </h2>
-        <p className="mt-0.5 text-xs text-zinc-400">{guide}</p>
-      </div>
-      <div className="px-5 py-4">{children}</div>
-    </div>
-  );
-}
+import { SectionCard } from "@/components/shared/section-card";
+import {
+  bucketLabels,
+  bucketColors,
+  funnelLabels,
+  segmentLabels,
+  segmentColors,
+} from "@/lib/constants/content";
 
 // ─── Segment Treatment Card ─────────────────────────────────
 

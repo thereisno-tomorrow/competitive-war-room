@@ -1,5 +1,5 @@
 import type { IntelligenceItem, PositioningClaim, Competitor } from "@/generated/prisma/client";
-import { FINMO_STRATEGIC_CONTEXT, getCompetitorProfile, SYNTHESIS_RUBRIC } from "@/lib/llm/context";
+import { FINMO_STRATEGIC_CONTEXT, FINMO_EXTENDED_CONTEXT, getCompetitorProfile, SYNTHESIS_RUBRIC } from "@/lib/llm/context";
 
 interface SignalAlertPromptContext {
   item: IntelligenceItem & { competitor: Competitor };
@@ -28,6 +28,8 @@ COMPETITOR CONTEXT:
 ${competitorProfile}
 
 ${SYNTHESIS_RUBRIC}
+
+${FINMO_EXTENDED_CONTEXT}
 
 TRIGGERING EVENT:
 - Competitor: ${item.competitor.name} (${item.competitor.tier})

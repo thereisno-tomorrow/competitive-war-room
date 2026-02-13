@@ -89,22 +89,3 @@ export function useGenerateBriefs() {
   });
 }
 
-export function useUpdateBriefStatus(id: string) {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (status: string) => {
-      const res = await fetch(`/api/content/briefs/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (!res.ok) throw new Error("Failed to update brief status");
-      return res.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["content", "briefs", id] });
-      queryClient.invalidateQueries({ queryKey: ["content", "briefs"] });
-    },
-  });
-}
