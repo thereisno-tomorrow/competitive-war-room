@@ -77,12 +77,62 @@ export interface LatestPulseResponse {
   }>;
 }
 
+interface PulseData {
+  publishedAt: string;
+  headline: string;
+}
+
+export interface DashboardResponse {
+  latestWeekly: (PulseData & { content: WeeklyPulseContent }) | null;
+  latestMonthly: (PulseData & { content: MonthlyPulseContent }) | null;
+  signalAlertsThisWeek: Array<{
+    id: string;
+    headline: string;
+    publishedAt: string;
+    content: SignalAlertContent;
+  }>;
+}
+
 export interface BattlecardSummary {
   competitorId: string;
   competitorName: string;
   tier: "TIER_1" | "TIER_2";
   lastUpdated: string;
   reframeCount: number;
+}
+
+// === Battlecard Section Types ===
+
+export interface QuickDismiss {
+  keyDismissals: string[];
+  talkTrack: string;
+}
+
+export interface WhyWeWinPoint {
+  point: string;
+  context: string;
+  action: string;
+  evidenceTier: EvidenceTier;
+}
+
+export interface WhyWeLosePoint {
+  point: string;
+  context: string;
+  action: string;
+  evidenceTier: EvidenceTier;
+}
+
+export interface TrapQuestion {
+  question: string;
+  whyItWorks: string;
+  followUp: string;
+}
+
+export interface ProofPoint {
+  type: "case_study" | "switch_story" | "quote";
+  text: string;
+  source?: string;
+  url?: string;
 }
 
 export interface BattlecardDetail {
@@ -99,6 +149,12 @@ export interface BattlecardDetail {
     sources: string[];
   }>;
   openQuestions: string[];
+  overview: string | null;
+  quickDismiss: QuickDismiss | null;
+  whyWeWin: WhyWeWinPoint[];
+  whyWeLose: WhyWeLosePoint[];
+  trapQuestions: TrapQuestion[];
+  proofPoints: ProofPoint[];
   lastUpdated: string;
 }
 

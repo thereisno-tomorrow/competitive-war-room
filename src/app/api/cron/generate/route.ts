@@ -47,6 +47,8 @@ interface GenerateResult {
   monthlyPulse: { id: string; headline: string } | null;
 }
 
+const MAX_SIGNAL_ALERTS_PER_RUN = 20;
+
 export async function POST(request: NextRequest) {
   if (!validateCronSecret(request)) {
     return NextResponse.json(
@@ -55,47 +57,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  const url = new URL(request.url);
   const llm = new ClaudeProvider();
+  const forceGenerate = url.searchParams.get("force") === "true";
+  const pulseOnly = url.searchParams.get("pulseOnly") === "true";
   const result: GenerateResult = {
     signalAlerts: [],
     weeklyPulse: null,
     monthlyPulse: null,
   };
 
-  // 1. Generate signal alerts for unprocessed alert-worthy items
-  const unprocessedItems = await prisma.intelligenceItem.findMany({
-    where: { alertTriggered: false },
-    include: { competitor: true, claimsAffected: true },
-  });
-
-  for (const item of unprocessedItems) {
-    const evaluation = evaluateAlertThreshold({
-      competitorTier: item.competitor.tier,
-      intelType: item.type,
-      content: item.rawContent,
-      affectsPositioningClaims: item.claimsAffected.length > 0,
-    });
-
-    if (evaluation.shouldAlert) {
-      const alert = await generateSignalAlert(llm, item.id, evaluation.reasons);
-      result.signalAlerts.push({
-        id: alert.id,
-        headline: alert.headline,
-        deduplicated: alert.deduplicated,
-      });
-
-      // Mark item as alert-triggered
-      await prisma.intelligenceItem.update({
-        where: { id: item.id },
-        data: { alertTriggered: true },
-      });
-    }
-  }
-
-  // 2. Weekly pulse on Mondays (SGT) — or forced via ?force=true
+  // 1. Pulses FIRST (fast — 2 LLM calls, ~30-60s)
   const sgtNow = getSGTDate();
   const dayOfWeek = sgtNow.getDay();
-  const forceGenerate = new URL(request.url).searchParams.get("force") === "true";
 
   if (forceGenerate || dayOfWeek === SCHEDULE.WEEKLY_PULSE_DAY) {
     const alreadyDone = !forceGenerate && await alreadyGeneratedToday("WEEKLY_PULSE");
@@ -105,13 +79,50 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 3. Monthly pulse on 1st-5th of month (SGT) — or forced
   const dayOfMonth = sgtNow.getDate();
   if (forceGenerate || (dayOfMonth >= 1 && dayOfMonth <= SCHEDULE.MONTHLY_PULSE_MAX_BUSINESS_DAY)) {
     const alreadyDone = !forceGenerate && await alreadyGeneratedToday("MONTHLY_PULSE");
     if (!alreadyDone) {
       const monthly = await generateMonthlyPulse(llm);
       result.monthlyPulse = { id: monthly.id, headline: monthly.headline };
+    }
+  }
+
+  // 2. Signal alerts (slow — 1 LLM call per item, capped)
+  if (!pulseOnly) {
+    const unprocessedItems = await prisma.intelligenceItem.findMany({
+      where: { alertTriggered: false },
+      include: { competitor: true, claimsAffected: true },
+      orderBy: { detectedAt: "desc" },
+      take: MAX_SIGNAL_ALERTS_PER_RUN,
+    });
+
+    for (const item of unprocessedItems) {
+      const evaluation = evaluateAlertThreshold({
+        competitorTier: item.competitor.tier,
+        intelType: item.type,
+        content: item.rawContent,
+        affectsPositioningClaims: item.claimsAffected.length > 0,
+      });
+
+      if (evaluation.shouldAlert) {
+        try {
+          const alert = await generateSignalAlert(llm, item.id, evaluation.reasons);
+          result.signalAlerts.push({
+            id: alert.id,
+            headline: alert.headline,
+            deduplicated: alert.deduplicated,
+          });
+        } catch (e) {
+          console.error(`Signal alert failed for ${item.id}:`, e instanceof Error ? e.message : e);
+        }
+      }
+
+      // Mark as triggered whether alert generated or not (prevents infinite retries)
+      await prisma.intelligenceItem.update({
+        where: { id: item.id },
+        data: { alertTriggered: true },
+      });
     }
   }
 

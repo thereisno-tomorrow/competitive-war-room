@@ -1,7 +1,8 @@
 import type { PositioningClaim } from "@/generated/prisma/client";
 import type { SourceCategory } from "@/lib/config/thresholds";
+import { FINMO_STRATEGIC_CONTEXT, getCompetitorProfile, CLASSIFICATION_RUBRIC } from "@/lib/llm/context";
 
-const MAX_CONTENT_LENGTH = 4000;
+const MAX_CONTENT_LENGTH = 8000;
 
 interface ClassifyIntelPromptContext {
   competitorName: string;
@@ -39,12 +40,20 @@ export function buildClassifyIntelPrompt(ctx: ClassifyIntelPromptContext): strin
     ? buildEventContext(ctx)
     : buildStateContext(ctx);
 
-  return `You are a competitive intelligence classifier for Finmo, a Series A treasury and payments fintech.
+  const competitorProfile = getCompetitorProfile(ctx.competitorName);
 
-COMPETITOR: ${ctx.competitorName}
-SOURCE TYPE: ${ctx.sourceType}
-SOURCE URL: ${ctx.sourceUrl}
-CHANGE TYPE: ${ctx.changeType}
+  return `You are Finmo's competitive intelligence classifier.
+
+${FINMO_STRATEGIC_CONTEXT}
+
+COMPETITOR BEING ANALYZED:
+${competitorProfile}
+
+SIGNAL DETAILS:
+- Competitor: ${ctx.competitorName}
+- Source Type: ${ctx.sourceType}
+- Source URL: ${ctx.sourceUrl}
+- Change Type: ${ctx.changeType}
 
 ${contextBlock}
 
@@ -53,6 +62,8 @@ ${truncated}
 
 FINMO'S POSITIONING CLAIMS:
 ${claimsList}
+
+${CLASSIFICATION_RUBRIC}
 
 TASK: Classify this intelligence. Respond with ONLY valid JSON matching this schema:
 {
@@ -77,9 +88,22 @@ RULES:
 }
 
 function buildEventContext(ctx: ClassifyIntelPromptContext): string {
-  const sourceLabel = ctx.sourceType === "PRESS_RSS"
-    ? "press/news RSS feed"
-    : "changelog/release notes page";
+  let sourceLabel: string;
+  if (ctx.sourceType === "PRESS_RSS") {
+    sourceLabel = "press/news RSS feed";
+  } else if (ctx.sourceType === "LINKEDIN") {
+    if (ctx.changeType === "linkedin_post") {
+      sourceLabel = "LinkedIn company page post — social media content from the competitor's official LinkedIn page";
+    } else if (ctx.changeType === "linkedin_job") {
+      sourceLabel = "LinkedIn job listing — a hiring signal from the competitor";
+    } else if (ctx.changeType === "linkedin_company_change") {
+      sourceLabel = "LinkedIn company profile — a change was detected in the competitor's company information (employee count, tagline, description)";
+    } else {
+      sourceLabel = "LinkedIn data source";
+    }
+  } else {
+    sourceLabel = "changelog/release notes page";
+  }
   return `CONTEXT: This is a NEW ITEM from a ${sourceLabel}. Each item typically represents a discrete event (article, announcement, release). Classify it based on its content. Use SKIP if this is boilerplate, a duplicate, or not competitively meaningful.`;
 }
 

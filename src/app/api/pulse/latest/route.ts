@@ -1,16 +1,23 @@
 import { prisma } from "@/lib/db";
 import { NextResponse } from "next/server";
+import { normalizeGoogleNewsUrl } from "@/lib/ingestion/google-news-url";
 
 export async function GET() {
-  const latestPulse = await prisma.generatedOutput.findFirst({
-    where: {
-      type: { in: ["WEEKLY_PULSE", "MONTHLY_PULSE"] },
-      validationStatus: { in: ["PASSED", "REGENERATED"] },
-    },
-    orderBy: { publishedAt: "desc" },
-  });
+  const validStatuses = ["PASSED", "REGENERATED"] as const;
+  const statusFilter = { in: [...validStatuses] };
 
-  if (!latestPulse) {
+  const [latestWeekly, latestMonthly] = await Promise.all([
+    prisma.generatedOutput.findFirst({
+      where: { type: "WEEKLY_PULSE", validationStatus: statusFilter },
+      orderBy: { publishedAt: "desc" },
+    }),
+    prisma.generatedOutput.findFirst({
+      where: { type: "MONTHLY_PULSE", validationStatus: statusFilter },
+      orderBy: { publishedAt: "desc" },
+    }),
+  ]);
+
+  if (!latestWeekly && !latestMonthly) {
     return NextResponse.json(
       { error: "No pulses found", code: "not_found" },
       { status: 404 },
@@ -20,25 +27,63 @@ export async function GET() {
   const weekAgo = new Date();
   weekAgo.setDate(weekAgo.getDate() - 7);
 
-  const signalAlerts = await prisma.generatedOutput.findMany({
-    where: {
-      type: "SIGNAL_ALERT",
-      validationStatus: { in: ["PASSED", "REGENERATED"] },
-      publishedAt: { gte: weekAgo },
-    },
-    orderBy: { publishedAt: "desc" },
-  });
+  const [signalAlerts, claims] = await Promise.all([
+    prisma.generatedOutput.findMany({
+      where: {
+        type: "SIGNAL_ALERT",
+        validationStatus: statusFilter,
+        publishedAt: { gte: weekAgo },
+      },
+      orderBy: { publishedAt: "desc" },
+    }),
+    prisma.positioningClaim.findMany({
+      select: { id: true, claimText: true },
+    }),
+  ]);
+
+  // Build lookup to resolve claim IDs → claim text in signal alert content
+  const claimMap = new Map(claims.map((c) => [c.id, c.claimText]));
+
+  const mapAlerts = (alerts: typeof signalAlerts) =>
+    alerts.map((alert) => {
+      const content = alert.content as Record<string, unknown>;
+      const sections = content?.sections as Record<string, unknown> | undefined;
+
+      // Resolve claimsAffected IDs to human-readable claim text
+      if (sections?.claimsAffected && Array.isArray(sections.claimsAffected)) {
+        sections.claimsAffected = (sections.claimsAffected as string[])
+          .map((id) => claimMap.get(id) ?? id)
+          .filter((text) => !/^c[a-z0-9]{20,}$/i.test(text)); // Drop unresolvable CUIDs
+      }
+
+      // Normalize Google News RSS redirect URLs → browser-clickable article URLs
+      if (sections?.sourceUrls && Array.isArray(sections.sourceUrls)) {
+        sections.sourceUrls = (sections.sourceUrls as string[]).map(normalizeGoogleNewsUrl);
+      }
+
+      return {
+        id: alert.id,
+        headline: alert.headline,
+        publishedAt: alert.publishedAt.toISOString(),
+        content,
+      };
+    });
 
   return NextResponse.json({
-    type: latestPulse.type === "WEEKLY_PULSE" ? "weekly" : "monthly",
-    publishedAt: latestPulse.publishedAt.toISOString(),
-    headline: latestPulse.headline,
-    content: latestPulse.content,
-    signalAlertsThisWeek: signalAlerts.map((alert) => ({
-      id: alert.id,
-      headline: alert.headline,
-      publishedAt: alert.publishedAt.toISOString(),
-      content: alert.content,
-    })),
+    latestWeekly: latestWeekly
+      ? {
+          publishedAt: latestWeekly.publishedAt.toISOString(),
+          headline: latestWeekly.headline,
+          content: latestWeekly.content,
+        }
+      : null,
+    latestMonthly: latestMonthly
+      ? {
+          publishedAt: latestMonthly.publishedAt.toISOString(),
+          headline: latestMonthly.headline,
+          content: latestMonthly.content,
+        }
+      : null,
+    signalAlertsThisWeek: mapAlerts(signalAlerts),
   });
 }

@@ -1,11 +1,23 @@
 import { cn } from "@/lib/utils";
 import type { ClaimStatus } from "@/generated/prisma/client";
 
-const statusConfig: Record<ClaimStatus, { label: string; className: string }> =
+const statusConfig: Record<ClaimStatus, { label: string; dotClass: string; labelClass: string }> =
   {
-    HOLDING: { label: "Holding", className: "bg-green-500" },
-    UNDER_PRESSURE: { label: "Under Pressure", className: "bg-amber-500" },
-    CONTESTED: { label: "Contested", className: "bg-red-500" },
+    HOLDING: {
+      label: "Holding",
+      dotClass: "bg-emerald-500",
+      labelClass: "text-emerald-700",
+    },
+    UNDER_PRESSURE: {
+      label: "Under Pressure",
+      dotClass: "bg-amber-500",
+      labelClass: "text-amber-700",
+    },
+    CONTESTED: {
+      label: "Contested",
+      dotClass: "bg-red-500",
+      labelClass: "text-red-700",
+    },
   };
 
 export function ClaimStatusIndicator({
@@ -17,15 +29,17 @@ export function ClaimStatusIndicator({
 }) {
   const config = statusConfig[status];
   return (
-    <div className="flex items-center gap-2">
-      <div className={cn("h-2.5 w-2.5 rounded-full", config.className)} />
-      <div>
-        <span className="text-xs font-medium text-zinc-500">
-          {config.label}
-        </span>
-        <p className="text-sm text-zinc-900 truncate max-w-[200px]">
+    <div className="min-w-0">
+      {claimText && (
+        <p className="text-sm font-semibold text-zinc-900 leading-snug mb-1.5">
           {claimText}
         </p>
+      )}
+      <div className="flex items-center gap-1.5">
+        <div className={cn("h-2 w-2 shrink-0 rounded-full", config.dotClass)} />
+        <span className={cn("text-xs font-medium", config.labelClass)}>
+          {config.label}
+        </span>
       </div>
     </div>
   );

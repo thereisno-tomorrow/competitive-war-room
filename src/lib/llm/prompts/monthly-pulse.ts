@@ -1,4 +1,5 @@
 import type { IntelligenceItem, PositioningClaim, Competitor } from "@/generated/prisma/client";
+import { FINMO_STRATEGIC_CONTEXT, getAllCompetitorProfiles, SYNTHESIS_RUBRIC } from "@/lib/llm/context";
 
 interface MonthlyPulsePromptContext {
   claims: PositioningClaim[];
@@ -26,9 +27,16 @@ export function buildMonthlyPulsePrompt(ctx: MonthlyPulsePromptContext): string 
     ? "No Tier 2 competitor activity this month."
     : tier2Items.map(formatItem).join("\n");
 
-  return `You are a competitive intelligence analyst for Finmo, a Series A treasury and payments platform.
+  return `You are Finmo's competitive intelligence analyst, writing the CMO's monthly strategic briefing. This is the most important CI output — it shapes positioning decisions, content strategy, and board-level narratives.
 
-FINMO'S THREE POSITIONING CLAIMS:
+${FINMO_STRATEGIC_CONTEXT}
+
+COMPETITIVE LANDSCAPE (threat models for all tracked competitors):
+${getAllCompetitorProfiles()}
+
+${SYNTHESIS_RUBRIC}
+
+FINMO'S THREE POSITIONING CLAIMS (current status):
 ${claimsList}
 
 TIER 1 COMPETITOR INTELLIGENCE (${ctx.monthStart} to ${ctx.monthEnd}):
@@ -43,16 +51,16 @@ TASK: Generate a Monthly Pulse briefing for the CMO.
 
 RULES:
 - Max 1000 words total
-- Provide a category health assessment: is the competitive landscape shifting, stable, or consolidating?
-- For Tier 1 competitors: identify narrative shifts — are they changing positioning, messaging, or strategy?
+- Category health: Is "Treasury Operating System" gaining traction? Are competitors converging on Finmo's quadrant or staying in their lanes?
+- For Tier 1 competitors: identify narrative shifts — are they changing positioning, messaging, or strategy? Use the competitor profiles above to assess what these shifts mean for Finmo specifically.
 - For Tier 2 competitors: flag watch items only — brief signals worth monitoring
-- For each positioning claim: assess confidence with evidence counts (for and against)
-- Include 2-3 actionable content implications — what should Finmo's content team do in response?
+- For each positioning claim: assess confidence with evidence counts (for and against). Use the threat models above to determine whether evidence supports or undermines each claim.
+- Include 2-3 actionable content implications — specific enough for a Head of Content Strategy to act on this week. BAD: "Create competitive content." GOOD: "Publish a 'payments platform vs. treasury operating system' comparison piece before Airwallex announces treasury features."
 - Every signal must carry its evidence tier (CONFIRMED, INFERRED, or UNKNOWN)
 - Focus on "so what" — why it matters for Finmo specifically, not just what happened
 - Items marked [SIMULATED] should still be analyzed but noted as simulated
-- If a quiet month: say so clearly. Do NOT generate filler analysis.
-- Be opinionated. Strategic clarity over comprehensive coverage.
+- If a quiet month: say so clearly. Do NOT generate filler analysis. Stability is a finding.
+- Be opinionated. Strategic clarity over comprehensive coverage. The CMO asks "how do we know?" — answer that question.
 
 OUTPUT FORMAT: Respond with ONLY valid JSON matching this exact schema:
 {

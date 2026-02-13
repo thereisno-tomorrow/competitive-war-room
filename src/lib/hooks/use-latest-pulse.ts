@@ -1,10 +1,10 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import type { LatestPulseResponse } from "@/types";
+import type { DashboardResponse } from "@/types";
 
 export function useLatestPulse() {
-  return useQuery<LatestPulseResponse>({
+  return useQuery<DashboardResponse | null>({
     queryKey: ["pulse", "latest"],
     queryFn: async () => {
       const res = await fetch("/api/pulse/latest");

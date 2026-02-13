@@ -28,7 +28,7 @@ export class ClaudeProvider implements LLMProvider {
 
     const response = await this.client.messages.create({
       model: SONNET_MODEL,
-      max_tokens: 4096,
+      max_tokens: 8192,
       messages: [
         {
           role: "user",
@@ -57,8 +57,8 @@ export class ClaudeProvider implements LLMProvider {
 
   async classifyStructured<T>(prompt: string): Promise<T> {
     const response = await this.client.messages.create({
-      model: HAIKU_MODEL,
-      max_tokens: 1024,
+      model: SONNET_MODEL,
+      max_tokens: 2048,
       messages: [
         {
           role: "user",
@@ -82,7 +82,7 @@ export class ClaudeProvider implements LLMProvider {
 
     const response = await this.client.messages.create({
       model: options?.fast ? HAIKU_MODEL : SONNET_MODEL,
-      max_tokens: options?.fast ? 2048 : 8192,
+      max_tokens: options?.fast ? 4096 : 8192,
       messages: [
         {
           role: "user",

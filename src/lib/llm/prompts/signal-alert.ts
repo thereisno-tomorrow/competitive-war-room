@@ -1,4 +1,5 @@
 import type { IntelligenceItem, PositioningClaim, Competitor } from "@/generated/prisma/client";
+import { FINMO_STRATEGIC_CONTEXT, getCompetitorProfile, SYNTHESIS_RUBRIC } from "@/lib/llm/context";
 
 interface SignalAlertPromptContext {
   item: IntelligenceItem & { competitor: Competitor };
@@ -17,7 +18,16 @@ export function buildSignalAlertPrompt(ctx: SignalAlertPromptContext): string {
     .map((r, i) => `${i + 1}. ${r}`)
     .join("\n");
 
-  return `You are a competitive intelligence analyst for Finmo, a Series A treasury and payments platform.
+  const competitorProfile = getCompetitorProfile(item.competitor.name);
+
+  return `You are Finmo's competitive intelligence analyst, briefing the CMO on a significant competitive event.
+
+${FINMO_STRATEGIC_CONTEXT}
+
+COMPETITOR CONTEXT:
+${competitorProfile}
+
+${SYNTHESIS_RUBRIC}
 
 TRIGGERING EVENT:
 - Competitor: ${item.competitor.name} (${item.competitor.tier})

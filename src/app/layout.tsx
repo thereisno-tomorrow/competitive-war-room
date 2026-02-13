@@ -31,7 +31,7 @@ export default function RootLayout({
         <Providers>
           <Nav />
           <ClaimsStrip />
-          <main className="mx-auto max-w-7xl px-6 py-6">
+          <main className="mx-auto max-w-[1400px] px-6 py-6">
             {children}
           </main>
         </Providers>

@@ -26,11 +26,14 @@ export const SOURCE_CATEGORIES: Record<SourceType, SourceCategory> = {
   WEBSITE: "STATE",
   STATUS_PAGE: "STATE",
 
+  // LinkedIn uses PhantomBuster — posts/jobs are discrete events, company
+  // sub-adapter handles its own baseline logic internally.
+  LINKEDIN: "EVENT",
+
   // Simulated/future types default to STATE (safe default = no hallucination)
   REVIEW: "STATE",
   JOB_POSTING: "STATE",
   SEO: "STATE",
-  LINKEDIN: "STATE",
   REGULATORY: "STATE",
 } as const;
 
@@ -42,6 +45,23 @@ export const INGESTION = {
   MAX_ITEMS_ON_FIRST_RUN: 15,
   /** Skip RSS articles older than this many days on first run */
   MAX_ARTICLE_AGE_DAYS: 14,
+  /** Maximum articles to enrich with full content per source */
+  MAX_ARTICLE_ENRICHMENTS_PER_SOURCE: 10,
+  /** Timeout for individual article fetch including URL resolution (ms) */
+  ARTICLE_FETCH_TIMEOUT_MS: 10_000,
+} as const;
+
+// ---------------------------------------------------------------------------
+// Event-level dedup
+// ---------------------------------------------------------------------------
+
+export const DEDUP = {
+  /** Same fingerprint + competitor within this window = duplicate */
+  EVENT_FINGERPRINT_WINDOW_DAYS: 7,
+  /** Ignore words shorter than this in fingerprint generation */
+  MIN_WORD_LENGTH: 4,
+  /** Number of significant words to include in fingerprint */
+  KEY_TERM_COUNT: 5,
 } as const;
 
 // ---------------------------------------------------------------------------

@@ -7,7 +7,10 @@ import {
   buildClassifyIntelPrompt,
   type ClassificationResult,
 } from "@/lib/llm/prompts/classify-intel";
-import { SOURCE_CATEGORIES, INGESTION } from "@/lib/config/thresholds";
+import { SOURCE_CATEGORIES, INGESTION, DEDUP } from "@/lib/config/thresholds";
+import { resolveGoogleNewsUrl } from "./google-news-url";
+import { generateEventFingerprint } from "./event-fingerprint";
+import { fetchArticleContent } from "./article-fetcher";
 
 const VALID_INTEL_TYPES: IntelType[] = [
   "PRODUCT_CHANGE", "PRICING_CHANGE", "HIRING_SIGNAL", "PARTNERSHIP",
@@ -128,9 +131,30 @@ export class IngestionRunner {
       if (changes.length > 0) {
         result.changesDetected += changes.length;
 
+        let enrichmentCount = 0;
+
         for (const change of changes) {
           change.competitorId = source.competitorId;
           change.sourceId = source.id;
+
+          // Enrich RSS items with full article content before classification.
+          // Gives the LLM 500-2000 words instead of a 20-word snippet.
+          let articleEnriched = false;
+          if (
+            change.changeType === "rss_new_item" &&
+            change.url &&
+            enrichmentCount < INGESTION.MAX_ARTICLE_ENRICHMENTS_PER_SOURCE
+          ) {
+            const article = await fetchArticleContent(change.url, {
+              timeoutMs: INGESTION.ARTICLE_FETCH_TIMEOUT_MS,
+            });
+            if (article) {
+              change.content = `${article.title || change.summary}\n\n${article.content}`;
+              change.url = article.resolvedUrl;
+              articleEnriched = true;
+              enrichmentCount++;
+            }
+          }
 
           let classification: ClassificationResult | null = null;
           try {
@@ -165,8 +189,17 @@ export class IngestionRunner {
           const validClaimIds = (classification?.affectedClaimIds ?? [])
             .filter((id) => claims.some((c) => c.id === id));
 
-          // Use LLM-extracted URL if available, fall back to adapter URL
-          const resolvedUrl = classification?.sourceUrl || change.url;
+          // URL resolution: if article enrichment already resolved the URL, use it directly.
+          // Otherwise, prefer LLM-extracted URL if it has a real path, then resolve Google News redirects.
+          let resolvedUrl: string;
+          if (articleEnriched) {
+            resolvedUrl = change.url; // Already resolved by article fetcher
+          } else {
+            const llmUrl = classification?.sourceUrl;
+            const llmUrlHasPath = llmUrl && /^https?:\/\/[^/]+\/.+/.test(llmUrl);
+            const rawUrl = llmUrlHasPath ? llmUrl : change.url;
+            resolvedUrl = await resolveGoogleNewsUrl(rawUrl);
+          }
 
           // Use adapter date (RSS pubDate) > LLM-extracted date > now
           const resolvedDate = change.publishedAt
@@ -175,11 +208,14 @@ export class IngestionRunner {
               ? new Date(classification.publishedAt)
               : new Date();
 
-          // Dedup for RSS: skip if an item with the same article URL already exists
-          // (RSS feeds re-list old articles — don't create duplicates)
-          // Website/changelog/status pages use hash-based detection so they only
-          // reach here when content actually changed — no dedup needed.
-          if (change.changeType === "rss_new_item") {
+          // Dedup for event sources: skip if an item with the same URL already exists.
+          // RSS feeds re-list old articles; LinkedIn phantoms return full result sets.
+          // Website/changelog/status pages use hash-based detection — no dedup needed.
+          if (
+            change.changeType === "rss_new_item" ||
+            change.changeType === "linkedin_post" ||
+            change.changeType === "linkedin_job"
+          ) {
             const existing = await prisma.intelligenceItem.findFirst({
               where: { sourceUrl: resolvedUrl, competitorId: source.competitorId },
               select: { id: true },
@@ -187,18 +223,39 @@ export class IngestionRunner {
             if (existing) continue;
           }
 
+          // Event-level dedup: same event fingerprint + competitor within window = skip
+          const summary = classification?.summary ?? change.summary;
+          const eventFingerprint = generateEventFingerprint(summary);
+
+          const windowStart = new Date();
+          windowStart.setDate(
+            windowStart.getDate() - DEDUP.EVENT_FINGERPRINT_WINDOW_DAYS,
+          );
+
+          const existingByFingerprint =
+            await prisma.intelligenceItem.findFirst({
+              where: {
+                eventFingerprint,
+                competitorId: source.competitorId,
+                detectedAt: { gte: windowStart },
+              },
+              select: { id: true },
+            });
+          if (existingByFingerprint) continue;
+
           await prisma.intelligenceItem.create({
             data: {
               competitorId: source.competitorId,
               sourceId: source.id,
               type: intelType,
               rawContent: change.content.slice(0, 10000),
-              summary: classification?.summary ?? change.summary,
+              summary,
               finmoImplication: classification?.finmoImplication ?? "",
               evidenceTier,
               sourceUrl: resolvedUrl,
               detectedAt: resolvedDate,
               simulated: false,
+              eventFingerprint,
               claimsAffected: validClaimIds.length > 0
                 ? { connect: validClaimIds.map((id) => ({ id })) }
                 : undefined,

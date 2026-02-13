@@ -99,3 +99,29 @@ Recurring issues and their fixes. Check here before debugging.
 **Symptom:** `Object is possibly 'undefined'` in seed-pulses.ts during `tsc --noEmit`.
 **Cause:** Pre-existing strict null check issues in seed file (array indexing without null checks).
 **Impact:** Seed script still runs fine via `tsx`. Only affects full type check.
+
+---
+
+## Data Migration & URL Resolution
+
+### Google News URLs don't resolve to real publisher URLs
+**Symptom:** Source links show `news.google.com/articles/CBMi...` or `AU_yqL...` instead of the actual publisher. Clicking may show "invalid web address."
+**Cause:** Google News RSS feeds use base64-encoded article IDs in two formats:
+- **CBMi... IDs** — base64 protobuf containing the publisher URL directly (field 1 varint + field 4 length-delimited URL)
+- **AU_yqL... IDs** — opaque token, URL not embedded, requires Google's batchexecute API with signature/timestamp credentials
+**Fix:** `resolveGoogleNewsUrl()` in `src/lib/ingestion/google-news-url.ts`. Strategy:
+1. Base64 decode the protobuf (instant, no network) — works for CBMi IDs
+2. For AU_yqL IDs: fetch article page HTML, extract `data-n-a-sg` (signature) and `data-n-a-ts` (timestamp) from the page, POST to `/_/DotsSplashUi/data/batchexecute` with those credentials
+3. Fallback: return normalized `/articles/...` URL (JS redirect still works in browsers)
+**References:** TS gist by huksley (GitHub) only handles CBMi IDs — incomplete for AU_yqL. Python decoder (SSujitX/google-news-url-decoder) has the correct two-step approach.
+**Files:** `src/lib/ingestion/google-news-url.ts`, `prisma/resolve-existing-urls.ts`
+
+### Regex captures query params when extracting URL path segments
+**Symptom:** Base64 decode fails or returns garbage — article ID includes `?oc=5`.
+**Cause:** Pattern like `(.+)` captures everything including `?` query params and `#` fragments.
+**Fix:** Use `([^?#]+)` to stop at query/fragment boundaries.
+
+### Migration script reports 0 updates when hundreds expected
+**Symptom:** Script runs successfully, logs "0 resolved" or "0 updated" against a large dataset.
+**Cause:** Prisma boilerplate is correct, but the core business function is buggy. The script iterates correctly but per-item logic silently fails.
+**Prevention:** Always test the core function on 3-5 samples in a debug script before running the full migration. See CLAUDE.md "Migration Scripts" section.

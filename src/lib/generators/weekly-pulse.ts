@@ -22,7 +22,7 @@ export async function generateWeeklyPulse(
 
   const [items, claims] = await Promise.all([
     prisma.intelligenceItem.findMany({
-      where: { detectedAt: { gte: weekStart } },
+      where: { detectedAt: { gte: weekStart }, simulated: false },
       include: { competitor: true },
       orderBy: { detectedAt: "desc" },
     }),
@@ -42,7 +42,7 @@ export async function generateWeeklyPulse(
 
   while (attempts < OUTPUT_LIMITS.MAX_REGENERATION_ATTEMPTS) {
     attempts++;
-    content = await llm.generateStructured<WeeklyPulseContent>(prompt, {});
+    content = await llm.generateStructured<WeeklyPulseContent>(prompt, {}, { fast: true });
 
     const validation = validateWeeklyPulse(
       content,

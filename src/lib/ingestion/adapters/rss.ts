@@ -4,14 +4,21 @@ import type { DataSource } from "@/generated/prisma/client";
 import type { IngestionAdapter, RawContent, DetectedChange } from "./base";
 import { hasContentChanged } from "../diff-engine";
 import { INGESTION } from "@/lib/config/thresholds";
+import { normalizeGoogleNewsUrl } from "../google-news-url";
 
-const parser = new Parser();
+type RssItem = Parser.Item & { source?: string };
+
+const parser: Parser<Record<string, unknown>, RssItem> = new Parser({
+  customFields: {
+    item: [["source", "source", { keepArray: false }]],
+  },
+});
 
 export class RssAdapter implements IngestionAdapter {
   readonly sourceType: SourceType = "PRESS_RSS";
 
   /** Store parsed items so detectChanges can split them. */
-  private lastFeedItems: Parser.Item[] = [];
+  private lastFeedItems: RssItem[] = [];
 
   async fetch(source: DataSource): Promise<RawContent> {
     const feed = await parser.parseURL(source.url);
@@ -44,8 +51,8 @@ export class RssAdapter implements IngestionAdapter {
     let items = this.lastFeedItems
       .filter((item) => item.title || item.contentSnippet);
 
-    // On first run, cap volume to avoid processing 50-100 backlog articles.
-    // Sort by date (most recent first), filter out old articles, then take top N.
+    // On first run, filter out old backlog articles and cap volume.
+    // On subsequent runs, URL dedup in the runner handles repeat articles.
     if (isFirstRun) {
       const cutoffDate = new Date();
       cutoffDate.setDate(cutoffDate.getDate() - INGESTION.MAX_ARTICLE_AGE_DAYS);
@@ -53,7 +60,7 @@ export class RssAdapter implements IngestionAdapter {
       items = items
         .filter((item) => {
           const dateStr = item.pubDate ?? item.isoDate;
-          if (!dateStr) return true; // keep items without dates (can't filter)
+          if (!dateStr) return true; // no date = allow (runner dedup catches repeats)
           return new Date(dateStr) >= cutoffDate;
         })
         .sort((a, b) => {
@@ -64,15 +71,27 @@ export class RssAdapter implements IngestionAdapter {
         .slice(0, INGESTION.MAX_ITEMS_ON_FIRST_RUN);
     }
 
-    // Return one change per RSS item with individual article URLs and dates
-    return items.map((item) => ({
-      competitorId: "",
-      sourceId: "",
-      changeType: "rss_new_item",
-      content: `${item.title ?? ""}\n${item.contentSnippet ?? ""}`.trim(),
-      url: item.link ?? current.url,
-      summary: item.title ?? `New RSS item from ${current.url}`,
-      publishedAt: item.pubDate ?? item.isoDate,
-    }));
+    // Return one change per RSS item with individual article URLs and dates.
+    // Normalize Google News RSS redirect URLs so they work in browsers.
+    return items.map((item) => {
+      const rawUrl = item.link ?? current.url;
+      const sourceName = item.source; // e.g. "Reuters", "Fintech Singapore"
+      const titleLine = item.title ?? "";
+      const snippetLine = item.contentSnippet ?? "";
+      const sourceLine = sourceName ? `Source: ${sourceName}` : "";
+
+      return {
+        competitorId: "",
+        sourceId: "",
+        changeType: "rss_new_item",
+        content: [titleLine, snippetLine, sourceLine]
+          .filter(Boolean)
+          .join("\n")
+          .trim(),
+        url: normalizeGoogleNewsUrl(rawUrl),
+        summary: item.title ?? `New RSS item from ${current.url}`,
+        publishedAt: item.pubDate ?? item.isoDate,
+      };
+    });
   }
 }

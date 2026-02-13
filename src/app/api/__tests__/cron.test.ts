@@ -32,6 +32,10 @@ vi.mock("@/lib/ingestion/adapters/status-page", () => ({
   StatusPageAdapter: vi.fn(),
 }));
 
+vi.mock("@/lib/ingestion/adapters/linkedin", () => ({
+  LinkedInAdapter: vi.fn(),
+}));
+
 // --- Mock prisma for generate route ---
 
 const mockFindFirst = vi.fn();

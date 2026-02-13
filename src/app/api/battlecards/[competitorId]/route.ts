@@ -1,6 +1,13 @@
 import { prisma } from "@/lib/db";
 import type { EvidenceTier } from "@/generated/prisma/client";
 import { NextRequest, NextResponse } from "next/server";
+import type {
+  QuickDismiss,
+  WhyWeWinPoint,
+  WhyWeLosePoint,
+  TrapQuestion,
+  ProofPoint,
+} from "@/types";
 
 interface BattlecardWeakness {
   text: string;
@@ -58,6 +65,12 @@ export async function GET(
       sources: r.sourceItems.map((s) => s.sourceUrl),
     })),
     openQuestions: battlecard.openQuestions as string[], // Safe cast: validated at write time
+    overview: battlecard.overview,
+    quickDismiss: battlecard.quickDismiss as QuickDismiss | null,
+    whyWeWin: (battlecard.whyWeWin as unknown as WhyWeWinPoint[] | null) ?? [],
+    whyWeLose: (battlecard.whyWeLose as unknown as WhyWeLosePoint[] | null) ?? [],
+    trapQuestions: (battlecard.trapQuestions as unknown as TrapQuestion[] | null) ?? [],
+    proofPoints: (battlecard.proofPoints as unknown as ProofPoint[] | null) ?? [],
     lastUpdated: battlecard.updatedAt.toISOString(),
   });
 }

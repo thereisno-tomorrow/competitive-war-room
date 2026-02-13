@@ -1,4 +1,5 @@
 import type { IntelligenceItem, PositioningClaim, Competitor } from "@/generated/prisma/client";
+import { FINMO_STRATEGIC_CONTEXT, getAllCompetitorProfiles, SYNTHESIS_RUBRIC } from "@/lib/llm/context";
 
 interface ClaimAssessmentPromptContext {
   claim: PositioningClaim;
@@ -16,7 +17,14 @@ export function buildClaimAssessmentPrompt(ctx: ClaimAssessmentPromptContext): s
         )
         .join("\n");
 
-  return `You are a competitive intelligence analyst for Finmo, a Series A treasury and payments platform.
+  return `You are Finmo's competitive intelligence analyst, assessing whether a core positioning claim remains defensible. The CMO will use this assessment to decide whether strategic adjustments are needed.
+
+${FINMO_STRATEGIC_CONTEXT}
+
+COMPETITIVE LANDSCAPE (for understanding which competitors threaten which claims):
+${getAllCompetitorProfiles()}
+
+${SYNTHESIS_RUBRIC}
 
 POSITIONING CLAIM UNDER ASSESSMENT:
 - Claim ID: ${claim.id}

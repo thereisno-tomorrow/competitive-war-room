@@ -33,20 +33,20 @@ export function AlertCard({ alert }: AlertCardProps) {
 
   return (
     <Card
-      className="py-4 cursor-pointer transition-colors hover:border-zinc-300"
+      className="py-3 cursor-pointer transition-all hover:border-zinc-300 hover:shadow-sm"
       onClick={() => setExpanded(!expanded)}
     >
       <CardHeader className="pb-0">
         <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-2 min-w-0">
-            <CardTitle className="text-sm font-semibold text-zinc-900 truncate">
+          <div className="min-w-0">
+            <CardTitle className="text-sm font-semibold text-zinc-800 leading-snug">
               {alert.headline}
             </CardTitle>
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <EvidenceTierBadge tier={sections.evidenceTier} />
             <span className="text-xs text-zinc-400">{formattedDate}</span>
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs text-zinc-400 w-4 text-center">
               {expanded ? "\u2212" : "+"}
             </span>
           </div>
@@ -55,12 +55,12 @@ export function AlertCard({ alert }: AlertCardProps) {
 
       {expanded && (
         <CardContent
-          className="space-y-4 pt-2"
+          className="space-y-4 pt-3"
           onClick={(e) => e.stopPropagation()}
         >
           {/* What Happened */}
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
               What Happened
             </h4>
             <p className="text-sm text-zinc-700 leading-relaxed">
@@ -70,7 +70,7 @@ export function AlertCard({ alert }: AlertCardProps) {
 
           {/* Why It Matters */}
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
               Why It Matters
             </h4>
             <p className="text-sm text-zinc-700 leading-relaxed">
@@ -80,7 +80,7 @@ export function AlertCard({ alert }: AlertCardProps) {
 
           {/* Recommended Response */}
           <div>
-            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
               Recommended Response
             </h4>
             <p className="text-sm text-zinc-700 leading-relaxed">
@@ -91,17 +91,17 @@ export function AlertCard({ alert }: AlertCardProps) {
           {/* Action Items */}
           {sections.actionItems.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
                 Action Items
               </h4>
-              <ul className="space-y-1">
+              <ul className="space-y-1.5">
                 {sections.actionItems.map((item, i) => (
                   <li
                     key={i}
-                    className="text-sm text-zinc-700 flex items-start gap-2"
+                    className="text-sm text-zinc-700 leading-relaxed flex items-start gap-2"
                   >
-                    <span className="text-zinc-400 mt-0.5 shrink-0">
-                      &bull;
+                    <span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-finmo-100 text-[9px] font-bold text-finmo-700">
+                      {i + 1}
                     </span>
                     {item}
                   </li>
@@ -113,14 +113,14 @@ export function AlertCard({ alert }: AlertCardProps) {
           {/* Claims Affected */}
           {sections.claimsAffected.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
                 Claims Affected
               </h4>
               <div className="flex flex-wrap gap-1.5">
                 {sections.claimsAffected.map((claim, i) => (
                   <span
                     key={i}
-                    className="inline-flex items-center px-2 py-0.5 rounded text-xs bg-zinc-100 text-zinc-600 border border-zinc-200"
+                    className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-finmo-50 text-finmo-700 border border-finmo-200/60"
                   >
                     {claim}
                   </span>
@@ -132,22 +132,35 @@ export function AlertCard({ alert }: AlertCardProps) {
           {/* Sources */}
           {sections.sourceUrls.length > 0 && (
             <div>
-              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1">
-                Sources
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 mb-1.5">
+                Source
               </h4>
-              <div className="flex flex-wrap gap-2">
-                {sections.sourceUrls.map((url, i) => (
-                  <a
-                    key={i}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-zinc-400 hover:text-zinc-600 underline underline-offset-2"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    Source {i + 1}
-                  </a>
-                ))}
+              <div className="flex flex-wrap items-center gap-2">
+                {sections.sourceUrls.map((url, i) => {
+                  const isGoogleNews =
+                    /^https?:\/\/news\.google\.com\/articles\//i.test(url);
+                  let label: string;
+                  try {
+                    label = isGoogleNews
+                      ? "View article"
+                      : new URL(url).hostname.replace(/^www\./, "");
+                  } catch {
+                    label = "Source";
+                  }
+                  return (
+                    <a
+                      key={i}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-md border border-zinc-200 bg-zinc-50 px-2.5 py-1 text-xs font-medium text-zinc-600 hover:border-finmo-200 hover:bg-finmo-50 hover:text-finmo-700 transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <span>↗</span>
+                      {label}
+                    </a>
+                  );
+                })}
               </div>
             </div>
           )}

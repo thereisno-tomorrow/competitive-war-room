@@ -19,6 +19,12 @@ const existingBattlecard = {
     },
   ] as BattlecardWeakness[],
   openQuestions: ["What is their pricing for SMBs?"],
+  overview: "Enterprise treasury management leader",
+  quickDismiss: { keyDismissals: ["Line 1"], talkTrack: "Talk track" },
+  whyWeWin: [{ point: "Unified platform", context: "Context", action: "Ask this", evidenceTier: "CONFIRMED" }],
+  whyWeLose: [{ point: "Brand credibility", context: "Context", action: "Reframe this", evidenceTier: "CONFIRMED" }],
+  trapQuestions: [{ question: "How long to implement?", whyItWorks: "Exposes timeline", followUp: "We do it in weeks" }],
+  proofPoints: [],
   competitor: { name: "Kyriba", tier: "TIER_1" },
 };
 
@@ -189,5 +195,21 @@ describe("updateBattlecard", () => {
     // With no new evidence, LLM is not called
     expect(mockLLM.generateStructured).not.toHaveBeenCalled();
     expect(result.weaknesses).toEqual(existingBattlecard.weaknesses);
+  });
+
+  it("does not modify human-curated battlecard sections", async () => {
+    const { updateBattlecard } = await import("../battlecard");
+    await updateBattlecard(mockLLM, "comp-1");
+
+    const updateCall = mockBattlecardUpdate.mock.calls[0]?.[0] as {
+      data: Record<string, unknown>;
+    };
+    // Generator should only update weaknesses — never touch human-curated sections
+    expect(updateCall.data).not.toHaveProperty("overview");
+    expect(updateCall.data).not.toHaveProperty("quickDismiss");
+    expect(updateCall.data).not.toHaveProperty("whyWeWin");
+    expect(updateCall.data).not.toHaveProperty("whyWeLose");
+    expect(updateCall.data).not.toHaveProperty("trapQuestions");
+    expect(updateCall.data).not.toHaveProperty("proofPoints");
   });
 });

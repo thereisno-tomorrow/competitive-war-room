@@ -118,21 +118,31 @@ function WeeklyPulseDetail({ content }: { content: WeeklyPulseContent }) {
       </section>
 
       {/* Action Required */}
-      {actionRequired && (
-        <>
-          <Separator />
-          <section>
-            <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-              <h3 className="text-sm font-semibold text-amber-800 mb-1">
-                Action Required
-              </h3>
-              <p className="text-sm text-amber-700 leading-relaxed">
-                {actionRequired}
-              </p>
-            </div>
-          </section>
-        </>
-      )}
+      <Separator />
+      <section>
+        <div
+          className={`rounded-lg border p-4 ${
+            actionRequired
+              ? "border-amber-200 bg-amber-50"
+              : "border-zinc-200 bg-zinc-50"
+          }`}
+        >
+          <h3
+            className={`text-sm font-semibold mb-1 ${
+              actionRequired ? "text-amber-800" : "text-zinc-500"
+            }`}
+          >
+            Action Required
+          </h3>
+          <p
+            className={`text-sm leading-relaxed ${
+              actionRequired ? "text-amber-700" : "text-zinc-400 italic"
+            }`}
+          >
+            {actionRequired ?? "No immediate actions required this week."}
+          </p>
+        </div>
+      </section>
 
       <Separator />
 

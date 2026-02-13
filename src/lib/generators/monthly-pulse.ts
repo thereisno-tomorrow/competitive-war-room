@@ -22,7 +22,7 @@ export async function generateMonthlyPulse(
 
   const [items, claims] = await Promise.all([
     prisma.intelligenceItem.findMany({
-      where: { detectedAt: { gte: monthStart } },
+      where: { detectedAt: { gte: monthStart }, simulated: false },
       include: { competitor: true },
       orderBy: { detectedAt: "desc" },
     }),
@@ -42,7 +42,7 @@ export async function generateMonthlyPulse(
 
   while (attempts < OUTPUT_LIMITS.MAX_REGENERATION_ATTEMPTS) {
     attempts++;
-    content = await llm.generateStructured<MonthlyPulseContent>(prompt, {});
+    content = await llm.generateStructured<MonthlyPulseContent>(prompt, {}, { fast: true });
 
     const validation = validateMonthlyPulse(
       content,

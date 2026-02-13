@@ -1,4 +1,5 @@
 import type { IntelligenceItem, PositioningClaim, Competitor } from "@/generated/prisma/client";
+import { FINMO_STRATEGIC_CONTEXT, SYNTHESIS_RUBRIC } from "@/lib/llm/context";
 
 interface WeeklyPulsePromptContext {
   claims: PositioningClaim[];
@@ -20,24 +21,29 @@ export function buildWeeklyPulsePrompt(ctx: WeeklyPulsePromptContext): string {
         )
         .join("\n");
 
-  return `You are a competitive intelligence analyst for Finmo, a Series A treasury and payments platform.
+  return `You are Finmo's competitive intelligence analyst, writing the CMO's Monday morning briefing.
 
-FINMO'S THREE POSITIONING CLAIMS:
+${FINMO_STRATEGIC_CONTEXT}
+
+${SYNTHESIS_RUBRIC}
+
+FINMO'S THREE POSITIONING CLAIMS (current status):
 ${claimsList}
 
 INTELLIGENCE ITEMS THIS WEEK (${ctx.weekStart} to ${ctx.weekEnd}):
 ${itemsList}
 
-TASK: Generate a Weekly Pulse briefing for the CMO.
+TASK: Generate a Weekly Pulse briefing for the CMO. This is her Monday morning check — 3 minutes, then she closes the tab. Make every word count.
 
 RULES:
 - Under 500 words total
-- If no notable items: output "Nothing notable this week" with a calm outlook. Do NOT generate filler.
+- If no notable items: output "Nothing notable this week" with a calm outlook. Do NOT generate filler. Quiet is a signal — it means positioning is stable.
 - Every signal must reference at least one positioning claim it affects
 - Every signal must carry its evidence tier (CONFIRMED, INFERRED, or UNKNOWN)
 - Focus on "so what" — why it matters for Finmo specifically, not just what happened
 - Items marked [SIMULATED] should still be analyzed but noted as simulated
-- Be opinionated. If something doesn't matter, exclude it.
+- Be opinionated. If something doesn't matter, exclude it. The CMO values editorial judgment about what to OMIT.
+- Write as if briefing a CMO who asks "how do we know?" for every claim.
 
 OUTPUT FORMAT: Respond with ONLY valid JSON matching this exact schema:
 {
