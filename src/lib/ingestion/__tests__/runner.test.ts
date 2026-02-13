@@ -38,6 +38,7 @@ function createMockLLM(overrides?: Partial<LLMProvider>): LLMProvider {
       affectedClaimIds: [],
       sourceUrl: "https://example.com",
       publishedAt: "",
+      eventKey: "testcompetitor-product-update-2026-02",
     }),
     generateStructured: vi.fn().mockResolvedValue({}),
     ...overrides,
@@ -164,6 +165,7 @@ describe("IngestionRunner", () => {
         finmoImplication: "Test implication",
         evidenceTier: "CONFIRMED",
         affectedClaimIds: ["claim-1"],
+        eventKey: "testcompetitor-product-change-2026-02",
       }),
     });
     const adapter = createMockAdapter();
@@ -429,6 +431,7 @@ describe("IngestionRunner", () => {
         finmoImplication: "",
         evidenceTier: "UNKNOWN",
         affectedClaimIds: [],
+        eventKey: "",
       }),
     });
     const adapter = createMockAdapter();
@@ -453,6 +456,7 @@ describe("IngestionRunner", () => {
         finmoImplication: "Test",
         evidenceTier: "CONFIRMED",
         affectedClaimIds: ["claim-1", "nonexistent-claim"],
+        eventKey: "testcompetitor-product-change-2026-02",
       }),
     });
     const adapter = createMockAdapter();

@@ -25,7 +25,7 @@ async function main() {
   let skipped = 0;
 
   for (const item of items) {
-    const fingerprint = generateEventFingerprint(item.summary);
+    const fingerprint = generateEventFingerprint(undefined, item.summary);
 
     if (item.eventFingerprint === fingerprint) {
       skipped++;

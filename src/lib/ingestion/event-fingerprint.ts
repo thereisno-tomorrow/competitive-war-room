@@ -1,10 +1,12 @@
 /**
- * Event-level dedup via deterministic fingerprinting.
+ * Event-level dedup via LLM-generated canonical event keys.
  *
- * Same news event covered by 5 publishers produces 5 articles with different
- * URLs but near-identical LLM-generated summaries. This module generates a
- * stable fingerprint from the summary so duplicate events can be detected
- * before creating redundant IntelligenceItems.
+ * The LLM classification prompt now returns an `eventKey` — a normalized,
+ * human-readable identifier like "nium-c-suite-hires-2026-02" that stays
+ * identical across publishers covering the same event.
+ *
+ * Falls back to the legacy word-extraction + SHA-256 algorithm when the
+ * LLM fails or returns no eventKey.
  */
 
 import { createHash } from "crypto";
@@ -20,16 +22,26 @@ const STOP_WORDS = new Set([
 ]);
 
 /**
- * Generate a deterministic fingerprint from an intelligence summary.
+ * Generate event fingerprint for dedup.
  *
- * 1. Lowercase, strip punctuation
- * 2. Filter out stop words and short words
- * 3. Take first N significant words (captures subject/object/action)
- * 4. Sort alphabetically (order-independent)
- * 5. SHA-256, truncated to 16 hex chars
+ * If the LLM provided an eventKey, normalize and use it directly.
+ * Falls back to legacy word-extraction + SHA-256 if no eventKey.
  */
-export function generateEventFingerprint(summary: string): string {
-  const words = summary
+export function generateEventFingerprint(
+  eventKey: string | undefined,
+  summaryFallback: string,
+): string {
+  if (eventKey?.trim()) {
+    // Normalize: lowercase, collapse whitespace to hyphens
+    let normalized = eventKey.trim().toLowerCase().replace(/\s+/g, "-");
+    // Strip trailing date patterns the LLM might add despite instructions
+    // Matches: -2026-02, -2026, -02 (trailing month-only)
+    normalized = normalized.replace(/-\d{4}(-\d{2})?$/, "");
+    return normalized;
+  }
+
+  // Legacy fallback for LLM failures
+  const words = summaryFallback
     .toLowerCase()
     .replace(/[^a-z0-9\s]/g, "")
     .split(/\s+/)

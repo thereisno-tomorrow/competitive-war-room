@@ -225,7 +225,7 @@ export class IngestionRunner {
 
           // Event-level dedup: same event fingerprint + competitor within window = skip
           const summary = classification?.summary ?? change.summary;
-          const eventFingerprint = generateEventFingerprint(summary);
+          const eventFingerprint = generateEventFingerprint(classification?.eventKey, summary);
 
           const windowStart = new Date();
           windowStart.setDate(

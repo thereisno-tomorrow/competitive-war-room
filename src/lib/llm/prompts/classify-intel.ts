@@ -23,6 +23,7 @@ export interface ClassificationResult {
   affectedClaimIds: string[];
   sourceUrl: string;
   publishedAt: string;
+  eventKey: string;
 }
 
 export function buildClassifyIntelPrompt(ctx: ClassifyIntelPromptContext): string {
@@ -73,8 +74,21 @@ TASK: Classify this intelligence. Respond with ONLY valid JSON matching this sch
   "evidenceTier": "CONFIRMED" if directly citable from source, "INFERRED" if reasonable conclusion, "UNKNOWN" if unclear,
   "affectedClaimIds": string[] (IDs of positioning claims affected, empty array if none or SKIP),
   "sourceUrl": string (the most specific article or press-release URL found in the content — look for URLs in parentheses. If no specific URL found, return the SOURCE URL above),
-  "publishedAt": string (publication date if visible in content, as ISO 8601 YYYY-MM-DD. If no date found, return "")
+  "publishedAt": string (publication date if visible in content, as ISO 8601 YYYY-MM-DD. If no date found, return ""),
+  "eventKey": string (a normalized key uniquely identifying the real-world event. Format: "{company}-{what-happened}". NO dates — temporal dedup is handled separately. Must be IDENTICAL across articles about the same event regardless of publisher. If type is SKIP, return "")
 }
+
+EVENTKEY FORMAT:
+- Lowercase, hyphenated, no special chars. Aim for 3-6 segments.
+- Structure: {company}-{what-happened}. Do NOT include dates, months, or years.
+- Normalize verbs to domain nouns: "announces/appoints/adds/names" → "hires"; "launches/releases/unveils" → "launch"; "raises/secures" → "funding"; "acquires/buys" → "acquisition"
+- Focus on WHAT ACTUALLY HAPPENED, not how the headline phrases it.
+- Examples (different articles about the SAME event must produce the SAME key):
+  "Nium Announces Three New C-Suite Hires" → "nium-c-suite-hires"
+  "Nium Appointed Three C-Suite Executives (CTO, CMO, CRCO)" → "nium-c-suite-hires"
+  "Kyriba Launches AI Cash Forecasting Module" → "kyriba-ai-cash-forecasting-launch"
+  "Airwallex raises $300M in Series F" → "airwallex-series-f-funding"
+  "Ripple Completes Acquisition of GTreasury" → "ripple-gtreasury-acquisition"
 
 RULES:
 - Pick the single most accurate type
@@ -84,7 +98,8 @@ RULES:
 - Be conservative with evidence tier — use CONFIRMED only when the source directly states it
 - Only include claim IDs that are genuinely affected by this signal
 - For sourceUrl: prefer specific article/announcement links over generic landing pages
-- For publishedAt: look for dates near headlines or article metadata — do NOT guess or invent dates`;
+- For publishedAt: look for dates near headlines or article metadata — do NOT guess or invent dates
+- eventKey must be IDENTICAL for articles about the same real-world event, regardless of which publisher wrote it`;
 }
 
 function buildEventContext(ctx: ClassifyIntelPromptContext): string {
