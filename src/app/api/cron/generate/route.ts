@@ -61,28 +61,44 @@ export async function POST(request: NextRequest) {
     monthlyPulse: null,
   };
 
-  // 1. Pulses FIRST (fast — 2 LLM calls, ~30-60s)
+  // 1. Pulses — run weekly + monthly in parallel
   const sgtNow = getSGTDate();
   const dayOfWeek = sgtNow.getDay();
-
-  if (forceGenerate || dayOfWeek === SCHEDULE.WEEKLY_PULSE_DAY) {
-    const alreadyDone = !forceGenerate && await alreadyGeneratedToday("WEEKLY_PULSE");
-    if (!alreadyDone) {
-      const weekly = await generateWeeklyPulse(llm);
-      result.weeklyPulse = { id: weekly.id, headline: weekly.headline };
-    }
-  }
-
   const dayOfMonth = sgtNow.getDate();
-  if (forceGenerate || (dayOfMonth >= 1 && dayOfMonth <= SCHEDULE.MONTHLY_PULSE_MAX_BUSINESS_DAY)) {
-    const alreadyDone = !forceGenerate && await alreadyGeneratedToday("MONTHLY_PULSE");
-    if (!alreadyDone) {
-      const monthly = await generateMonthlyPulse(llm);
-      result.monthlyPulse = { id: monthly.id, headline: monthly.headline };
-    }
+
+  const shouldWeekly = forceGenerate || dayOfWeek === SCHEDULE.WEEKLY_PULSE_DAY;
+  const shouldMonthly = forceGenerate || (dayOfMonth >= 1 && dayOfMonth <= SCHEDULE.MONTHLY_PULSE_MAX_BUSINESS_DAY);
+
+  // Pre-check dedup in parallel
+  const [weeklyDone, monthlyDone] = await Promise.all([
+    shouldWeekly && !forceGenerate ? alreadyGeneratedToday("WEEKLY_PULSE") : false,
+    shouldMonthly && !forceGenerate ? alreadyGeneratedToday("MONTHLY_PULSE") : false,
+  ]);
+
+  // Fire both pulse generations in parallel
+  const pulsePromises: Promise<void>[] = [];
+
+  if (shouldWeekly && !weeklyDone) {
+    pulsePromises.push(
+      generateWeeklyPulse(llm).then((weekly) => {
+        result.weeklyPulse = { id: weekly.id, headline: weekly.headline };
+      }),
+    );
   }
 
-  // 2. Signal alerts (slow — 1 LLM call per item, capped)
+  if (shouldMonthly && !monthlyDone) {
+    pulsePromises.push(
+      generateMonthlyPulse(llm).then((monthly) => {
+        result.monthlyPulse = { id: monthly.id, headline: monthly.headline };
+      }),
+    );
+  }
+
+  await Promise.all(pulsePromises);
+
+  // 2. Signal alerts — batched parallel (ALERT_CONCURRENCY at a time)
+  const ALERT_CONCURRENCY = 5;
+
   if (!pulseOnly) {
     const unprocessedItems = await prisma.intelligenceItem.findMany({
       where: { alertTriggered: false },
@@ -91,32 +107,48 @@ export async function POST(request: NextRequest) {
       take: MAX_SIGNAL_ALERTS_PER_RUN,
     });
 
-    for (const item of unprocessedItems) {
-      const evaluation = evaluateAlertThreshold({
+    // Evaluate thresholds synchronously (no LLM, instant)
+    const itemsToProcess = unprocessedItems.map((item) => ({
+      item,
+      evaluation: evaluateAlertThreshold({
         competitorTier: item.competitor.tier,
         intelType: item.type,
         content: item.rawContent,
         affectsPositioningClaims: item.claimsAffected.length > 0,
-      });
+      }),
+    }));
 
-      if (evaluation.shouldAlert) {
-        try {
-          const alert = await generateSignalAlert(llm, item.id, evaluation.reasons);
-          result.signalAlerts.push({
-            id: alert.id,
-            headline: alert.headline,
-            deduplicated: alert.deduplicated,
-          });
-        } catch (e) {
-          console.error(`Signal alert failed for ${item.id}:`, e instanceof Error ? e.message : e);
-        }
-      }
+    // Process in batches of ALERT_CONCURRENCY
+    for (let i = 0; i < itemsToProcess.length; i += ALERT_CONCURRENCY) {
+      const batch = itemsToProcess.slice(i, i + ALERT_CONCURRENCY);
 
-      // Mark as triggered whether alert generated or not (prevents infinite retries)
-      await prisma.intelligenceItem.update({
-        where: { id: item.id },
-        data: { alertTriggered: true },
-      });
+      await Promise.all(
+        batch.map(async ({ item, evaluation }) => {
+          if (evaluation.shouldAlert) {
+            try {
+              const alert = await generateSignalAlert(llm, item.id, evaluation.reasons);
+              result.signalAlerts.push({
+                id: alert.id,
+                headline: alert.headline,
+                deduplicated: alert.deduplicated,
+              });
+              await prisma.intelligenceItem.update({
+                where: { id: item.id },
+                data: { alertTriggered: true },
+              });
+            } catch (e) {
+              // Leave alertTriggered: false so item gets retried next run
+              console.error(`Signal alert failed for ${item.id}:`, e instanceof Error ? e.message : e);
+            }
+          } else {
+            // Didn't meet threshold — mark as processed
+            await prisma.intelligenceItem.update({
+              where: { id: item.id },
+              data: { alertTriggered: true },
+            });
+          }
+        }),
+      );
     }
   }
 

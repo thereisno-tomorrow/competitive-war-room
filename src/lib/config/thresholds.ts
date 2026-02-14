@@ -47,8 +47,9 @@ export const INGESTION = {
   MAX_ARTICLE_AGE_DAYS: 14,
   /** Maximum articles to enrich with full content per source */
   MAX_ARTICLE_ENRICHMENTS_PER_SOURCE: 10,
-  /** Timeout for individual article fetch including URL resolution (ms) */
-  ARTICLE_FETCH_TIMEOUT_MS: 10_000,
+  /** Timeout for individual article fetch including URL resolution (ms).
+   *  Budget: ~5s Google News batchexecute (2 requests) + ~5s article fetch + margin. */
+  ARTICLE_FETCH_TIMEOUT_MS: 15_000,
   /** Jaccard threshold for title dedup within a single batch */
   TITLE_SIMILARITY_THRESHOLD_BATCH: 0.5,
   /** Global safety cap: max new items per run (prevents cost explosion on fresh start) */
@@ -71,13 +72,12 @@ export const DEDUP = {
 // ---------------------------------------------------------------------------
 
 export const ALERT_THRESHOLDS = {
-  /** Any of these conditions being true triggers a Signal Alert */
-  tier1CompetitorInvolved: true,
-  positioningClaimAffected: true,
+  /** Standalone triggers — always alert */
   pricingChange: true,
   outage: true,
-  negativePressEvent: true,
   treasuryOSLanguageDetected: true,
+  /** Compound triggers — only alert when positioning claim is also affected */
+  claimSensitiveTypes: ["PRODUCT_CHANGE", "MESSAGING_SHIFT"] as const,
 } as const;
 
 // ---------------------------------------------------------------------------

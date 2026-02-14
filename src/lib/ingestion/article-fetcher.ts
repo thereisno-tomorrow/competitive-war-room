@@ -36,8 +36,8 @@ export async function fetchArticleContent(
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    // Step 1: Resolve Google News URL to real publisher URL
-    const resolvedUrl = await resolveGoogleNewsUrl(url);
+    // Step 1: Resolve Google News URL to real publisher URL (may make 2 HTTP requests)
+    const resolvedUrl = await resolveGoogleNewsUrl(url, controller.signal);
 
     // FP1: If URL is still Google News after resolution, skip —
     // Google News pages use JS redirects that fetch() can't follow.
@@ -50,8 +50,13 @@ export async function fetchArticleContent(
       signal: controller.signal,
       headers: {
         "User-Agent":
-          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        Accept: "text/html,application/xhtml+xml",
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+        Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.9",
+        Referer: "https://news.google.com/",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "cross-site",
       },
       redirect: "follow",
     });
@@ -75,19 +80,19 @@ export async function fetchArticleContent(
     const reader = new Readability(dom.window.document);
     const article = reader.parse();
 
-    if (
-      !article ||
-      !article.textContent ||
-      article.textContent.trim().length < 100
-    ) {
-      return null;
+    let cleanText: string | null = null;
+
+    if (article?.textContent && article.textContent.trim().length >= 100) {
+      cleanText = article.textContent
+        .replace(/\n{3,}/g, "\n\n")
+        .trim()
+        .slice(0, MAX_ARTICLE_LENGTH);
+    } else {
+      // Fallback: extract <p> tags when Readability fails (paywalls, unusual structure)
+      cleanText = extractParagraphs(dom.window.document);
     }
 
-    // Step 4: Clean and truncate
-    const cleanText = article.textContent
-      .replace(/\n{3,}/g, "\n\n")
-      .trim()
-      .slice(0, MAX_ARTICLE_LENGTH);
+    if (!cleanText) return null;
 
     // Use final URL after any HTTP redirects
     const finalUrl = response.url || resolvedUrl;
@@ -95,7 +100,7 @@ export async function fetchArticleContent(
     return {
       content: cleanText,
       resolvedUrl: finalUrl,
-      title: article.title || undefined,
+      title: article?.title || undefined,
     };
   } catch {
     // Network error, timeout, parse error — all return null (graceful degradation)
@@ -103,4 +108,14 @@ export async function fetchArticleContent(
   } finally {
     clearTimeout(timeout);
   }
+}
+
+/** Last-resort extraction: concatenate <p> tags when Readability can't parse. */
+function extractParagraphs(doc: Document): string | null {
+  const paragraphs = Array.from(doc.querySelectorAll("p"))
+    .map((p) => p.textContent?.trim() ?? "")
+    .filter((t) => t.length > 40);
+
+  const text = paragraphs.join("\n\n").slice(0, MAX_ARTICLE_LENGTH);
+  return text.length >= 200 ? text : null;
 }

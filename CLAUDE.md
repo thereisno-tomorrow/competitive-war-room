@@ -2,9 +2,39 @@
 
 Automated competitive intelligence system for Finmo's CMO. Ingests competitor data from free web sources, classifies with LLM, auto-publishes structured intelligence outputs (Weekly Pulse, Monthly Pulse, Signal Alerts, Battlecards) to a dashboard. No human gate on publishing.
 
-**Status:** MVP complete — full pipeline live. See `PROGRESS.md` for current state. See `ERRORS-SOLUTIONS.md` for known issues.
+Build from **MVP PRD** (`prd-competitive-war-room-mvp.md`). Full vision PRD is reference only — do not build V2 features. When in doubt about scope, check Section 13 (Scope Boundaries). See `ERRORS-SOLUTIONS.md` for troubleshooting.
 
-Build from **MVP PRD** (`prd-competitive-war-room-mvp.md`). Full vision PRD is reference only — do not build V2 features. When in doubt about scope, check Section 13 (Scope Boundaries).
+## Session Handoff (update at end of each session)
+
+> **IMPORTANT:** After completing significant work (new features, pipeline changes, bug fixes), proactively offer to update this section and the memory file (`competitive-war-room.md`) before the session ends. Don't wait for the user to ask — suggest it when work seems done and the user is satisfied.
+
+**Last session:** Feb 14 — Batch classify refactor + Google News URL fix
+**Current state:** MVP complete, pipeline fully operational. ~7 real intel items, 4 signal alerts, weekly + monthly pulses generated from live data. 200 tests passing (9 failing), 21 test files.
+**What's broken:** 4 PRESS_RSS sources are HTML pages not RSS feeds. Generation takes 3-5min (sequential Sonnet calls for signal alerts).
+**In progress:** Nothing — clean slate
+**Recent key decisions:**
+- Sonnet 4.5 for classification (not Haiku — too aggressive with SKIP on nuanced relevance)
+- Full article fetching via `@mozilla/readability` before classification (RSS snippets too short)
+- Batch-per-competitor classification (5 LLM calls vs ~45, $0.04 vs ~$0.45)
+- Unified dashboard with always-render sections (no layout shifts)
+
+## Hot Files
+
+| File | Purpose |
+|------|---------|
+| `src/lib/ingestion/runner.ts` | Ingestion pipeline orchestrator (classify, enrich, store) |
+| `src/lib/llm/prompts/classify-intel.ts` | Classification prompt + batch prompt builder |
+| `src/lib/llm/claude.ts` | LLM provider (Sonnet/Haiku config, token limits) |
+| `src/lib/config/thresholds.ts` | All tunable constants (caps, timeouts, thresholds) |
+| `src/app/api/cron/ingest/route.ts` | Ingestion API endpoint |
+| `src/app/api/cron/generate/route.ts` | Generation API endpoint (pulseOnly, force params) |
+| `src/lib/generators/weekly-pulse.ts` | Weekly pulse generator |
+| `src/lib/generators/monthly-pulse.ts` | Monthly pulse generator |
+| `src/lib/ingestion/google-news-url.ts` | Google News URL resolution (two-step batchexecute) |
+| `src/lib/ingestion/article-fetcher.ts` | Full article content extraction (Readability + jsdom) |
+| `src/components/battlecard/battlecard-detail.tsx` | Battlecard detail page UI (SectionCard pattern) |
+| `src/app/page.tsx` | Home — UnifiedDashboard (merged weekly + monthly) |
+| `prisma/schema.prisma` | Database schema — **PROTECTED** |
 
 ## Tech Stack
 
@@ -14,7 +44,7 @@ Build from **MVP PRD** (`prd-competitive-war-room-mvp.md`). Full vision PRD is r
 - **Prisma 7.4** ORM + `@prisma/adapter-pg` driver adapter + **PostgreSQL** (Docker locally, Neon on Vercel)
 - **@anthropic-ai/sdk** — Sonnet 4.5 for classification + synthesis/generation
 - **Cheerio 1.x** + **rss-parser 3.x** for scraping/ingestion
-- **Vitest 4.x** for testing (~200 tests, 21 test files)
+- **Vitest 4.x** for testing (209 tests, 21 test files)
 - Deploy: **Vercel Pro** (300s timeout required)
 
 ## Architecture
@@ -93,6 +123,11 @@ curl -X POST "http://localhost:3000/api/cron/generate?force=true" -H "Authorizat
 # Generate pulse only (skip signal alerts)
 curl -X POST "http://localhost:3000/api/cron/generate?force=true&pulseOnly=true" -H "Authorization: Bearer $CRON_SECRET"
 
+# Direct pipeline execution (no dev server needed)
+npx tsx src/scripts/run-ingest.ts          # Run ingestion pipeline directly
+npx tsx src/scripts/clear-feed.ts          # Wipe GeneratedOutputs + IntelligenceItems + SeenArticles
+npx tsx src/scripts/check-intel-quality.ts # Diagnostic: show stored intel quality
+
 # Full reset (wipe + seed + ingest + generate)
 npx tsx prisma/wipe-and-reset.ts   # Wipe intel, seen articles, reset sources
 npx prisma db seed                 # Re-seed
@@ -104,6 +139,13 @@ npx tsx -r dotenv/config prisma/reset-generate.ts          # Clear generated out
 npx tsx -r dotenv/config prisma/backfill-fingerprints.ts   # Regenerate fingerprints
 ```
 
+## Vercel Deployment (not yet done)
+
+1. Import `competitive-war-room` repo at vercel.com/new
+2. Add Postgres database from Storage tab (Neon, free tier)
+3. Add env vars: `ANTHROPIC_API_KEY`, `CRON_SECRET`
+4. Deploy — `vercel.json` already configures daily crons
+
 ## Migration Scripts
 
 Prisma utility scripts in `prisma/*.ts` follow the same boilerplate — copy from any existing script. Run: `npx tsx prisma/script-name.ts`
@@ -113,15 +155,15 @@ Prisma utility scripts in `prisma/*.ts` follow the same boilerplate — copy fro
 
 ## Pipeline Architecture
 
-**Ingestion** (`/api/cron/ingest`) — ~8s steady-state, ~60s with new articles
+**Ingestion** (`/api/cron/ingest`) — ~8s steady-state, ~90s with new articles
 1. **FETCH** — pull RSS feeds from all EVENT sources (~385 items)
 2. **REMEMBER** — check `seen_articles` table, filter to genuinely new URLs, record ALL URLs as seen. Safety cap: max 50 new items/run.
 3. **TITLE DEDUP** — Jaccard similarity within batch (free, catches cross-publisher dupes)
-4. **ENRICH** — fetch full article content via Readability (best-effort, Google News resolution currently broken)
-5. **CLASSIFY** — Sonnet 4.5 classifies → type, summary, finmoImplication, evidenceTier, affectedClaimIds (or `SKIP`)
-6. **STORE** — create `IntelligenceItem` with fingerprint dedup safety net
-- **STATE sources** (website, changelog, status-page): separate loop — first run stores baseline hash only; subsequent runs classify deltas
-- **Cost:** $0.00/run steady-state, $0.01 per genuinely new article
+4. **ENRICH** — resolve Google News URLs via batchexecute API, fetch full article content via Readability (~60% success rate)
+5. **CLASSIFY** — **Batch per competitor**: all articles for a competitor sent in one Sonnet 4.5 call. LLM clusters same-event articles, returns `{ events: [...] }` with merged articleIndices. ~5 LLM calls per run (1 per competitor with articles).
+6. **STORE** — create `IntelligenceItem` with exact fingerprint dedup safety net
+- **STATE sources** (website, changelog, status-page): separate loop — first run stores baseline hash only; subsequent runs classify with single-article prompt
+- **Cost:** ~$0.04/run with new articles (~5 batch LLM calls), $0.00/run steady-state
 
 **Generation** (`/api/cron/generate`) — 3-5 min
 1. Signal alerts: evaluates unprocessed items against alert thresholds, generates via Sonnet 4.5

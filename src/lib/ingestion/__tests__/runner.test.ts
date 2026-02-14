@@ -33,15 +33,34 @@ import { IngestionRunner } from "../runner";
 
 function createMockLLM(overrides?: Partial<LLMProvider>): LLMProvider {
   return {
-    classifyStructured: vi.fn().mockResolvedValue({
-      type: "PRODUCT_CHANGE",
-      summary: "Competitor updated their product page",
-      finmoImplication: "May indicate new feature launch targeting Finmo's segment",
-      evidenceTier: "INFERRED",
-      affectedClaimIds: [],
-      sourceUrl: "https://example.com",
-      publishedAt: "",
-      eventKey: "testcompetitor-product-update-2026-02",
+    classifyStructured: vi.fn().mockImplementation((prompt: string) => {
+      // Batch prompt (EVENT sources) — detected by "ARTICLES:" marker
+      if (prompt.includes("ARTICLES:")) {
+        return Promise.resolve({
+          events: [{
+            articleIndices: [0],
+            eventKey: "testcompetitor-product-update",
+            type: "PRODUCT_CHANGE",
+            summary: "Competitor updated their product page",
+            finmoImplication: "May indicate new feature launch targeting Finmo's segment",
+            evidenceTier: "INFERRED",
+            affectedClaimIds: [],
+            sourceUrl: "https://example.com",
+            publishedAt: "",
+          }],
+        });
+      }
+      // Single-article prompt (STATE sources)
+      return Promise.resolve({
+        type: "PRODUCT_CHANGE",
+        summary: "Competitor updated their product page",
+        finmoImplication: "May indicate new feature launch targeting Finmo's segment",
+        evidenceTier: "INFERRED",
+        affectedClaimIds: [],
+        sourceUrl: "https://example.com",
+        publishedAt: "",
+        eventKey: "testcompetitor-product-update-2026-02",
+      });
     }),
     generateStructured: vi.fn().mockResolvedValue({}),
     ...overrides,

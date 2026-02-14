@@ -52,3 +52,38 @@ export function generateEventFingerprint(
 
   return createHash("sha256").update(input).digest("hex").slice(0, 16);
 }
+
+/**
+ * Fuzzy match two event fingerprints by word-segment overlap.
+ *
+ * Splits by hyphens, computes overlap. Returns true if segments share
+ * enough in common to likely be the same event described differently.
+ *
+ * Example:
+ *   "ripple-gtreasury-acquisition" vs "ripple-gtreasury-partnership"
+ *   Shared: {ripple, gtreasury} = 2, each has 1 unique → match
+ */
+export function fuzzyFingerprintMatch(
+  fp1: string,
+  fp2: string,
+  options?: { minSharedSegments?: number; maxDifferentSegments?: number },
+): boolean {
+  const minShared = options?.minSharedSegments ?? 2;
+  const maxDiff = options?.maxDifferentSegments ?? 1;
+
+  const segs1 = new Set(fp1.split("-").filter((s) => s.length > 0));
+  const segs2 = new Set(fp2.split("-").filter((s) => s.length > 0));
+
+  // Skip legacy hex fingerprints (no hyphens → single segment)
+  if (segs1.size <= 1 || segs2.size <= 1) return false;
+
+  let shared = 0;
+  for (const seg of segs1) {
+    if (segs2.has(seg)) shared++;
+  }
+
+  const onlyIn1 = segs1.size - shared;
+  const onlyIn2 = segs2.size - shared;
+
+  return shared >= minShared && onlyIn1 <= maxDiff && onlyIn2 <= maxDiff;
+}

@@ -184,6 +184,7 @@ export interface IntelResponse {
   total: number;
   limit: number;
   offset: number;
+  lastUpdated: string | null;
 }
 
 export interface IntelFilters {

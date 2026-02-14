@@ -9,11 +9,13 @@ import type { IngestionAdapter } from "./adapters/base";
 import { hashContent } from "./diff-engine";
 import {
   buildClassifyIntelPrompt,
+  buildBatchClassifyPrompt,
   type ClassificationResult,
+  type BatchClassificationResult,
 } from "@/lib/llm/prompts/classify-intel";
 import { SOURCE_CATEGORIES, INGESTION } from "@/lib/config/thresholds";
 import { resolveGoogleNewsUrl } from "./google-news-url";
-import { generateEventFingerprint } from "./event-fingerprint";
+import { generateEventFingerprint, fuzzyFingerprintMatch } from "./event-fingerprint";
 import { fetchArticleContent } from "./article-fetcher";
 import { deduplicateByTitle } from "./title-similarity";
 
@@ -134,11 +136,11 @@ export class IngestionRunner {
     const enriched = await this.enrichArticles(afterBatchDedup, stats);
     this.log("ENRICH", `${afterBatchDedup.length} articles → ${stats.articlesEnriched} enriched, ${stats.enrichmentsFailed} failed`);
 
-    // Phase 5: CLASSIFY — Sonnet classification (the expensive step)
+    // Phase 5: CLASSIFY — batch per competitor (Sonnet classification)
     const classified = await this.classifyItems(enriched, claims, stats);
-    this.log("CLASSIFY", `${enriched.length} LLM calls → ${classified.length} intel + ${stats.llmSkipped} SKIP ($${stats.estimatedCostUsd.toFixed(2)})`);
+    this.log("CLASSIFY", `${enriched.length} articles → ${classified.length} intel + ${stats.llmSkipped} SKIP ($${stats.estimatedCostUsd.toFixed(2)})`);
 
-    // Phase 6: STORE — final fingerprint check + create IntelligenceItem
+    // Phase 6: STORE — final fingerprint check (exact) + create IntelligenceItem
     await this.storeItems(classified, claims, stats);
     this.log("STORE", `${classified.length} → ${stats.itemsCreated} created (${stats.fingerprintDedupSkipped} fingerprint conflicts)`);
 
@@ -308,67 +310,134 @@ export class IngestionRunner {
     return items;
   }
 
-  // ─── Phase 7: CLASSIFY ───────────────────────────────────────────
+  // ─── Phase 5: CLASSIFY (batch per competitor) ────────────────────
 
   private async classifyItems(
     items: PipelineItem[],
     claims: Awaited<ReturnType<typeof prisma.positioningClaim.findMany>>,
     stats: IngestionRunStats,
   ): Promise<PipelineItem[]> {
+    if (items.length === 0) return [];
+
+    // 1. Group items by competitor
+    const byCompetitor = new Map<string, PipelineItem[]>();
+    for (const item of items) {
+      const group = byCompetitor.get(item.competitorId) ?? [];
+      group.push(item);
+      byCompetitor.set(item.competitorId, group);
+    }
+
+    // 2. Fetch existing event keys for cross-run dedup context
+    const competitorIds = [...byCompetitor.keys()];
+    const existingEventKeys = await this.getExistingEventKeys(competitorIds);
+
     const classified: PipelineItem[] = [];
 
-    for (const item of items) {
-      const sourceCategory = SOURCE_CATEGORIES[item.sourceType];
-      const content = item.enrichedContent ?? item.snippet;
+    // 3. Batch classify per competitor
+    for (const [competitorId, competitorItems] of byCompetitor) {
+      const competitorName = competitorItems[0]!.competitorName;
 
-      let classification: ClassificationResult | null = null;
+      // Build article list for batch prompt
+      const articles = competitorItems.map((item, idx) => ({
+        index: idx,
+        title: item.title,
+        content: item.enrichedContent ?? item.snippet,
+        sourceUrl: item.resolvedUrl ?? item.url,
+        sourceType: item.sourceType,
+        changeType: item.changeType,
+        pubDate: item.pubDate,
+      }));
+
+      let batchResult: BatchClassificationResult | null = null;
       try {
-        const prompt = buildClassifyIntelPrompt({
-          competitorName: item.competitorName,
-          sourceType: item.sourceType,
-          sourceUrl: item.resolvedUrl ?? item.url,
-          rawContent: content,
-          changeType: item.changeType,
+        const prompt = buildBatchClassifyPrompt({
+          competitorName,
+          articles,
           claims,
-          sourceCategory,
-          isFirstRun: false, // EVENT sources in phased pipeline are never "first run" for classification
+          existingEventKeys: existingEventKeys.get(competitorId),
         });
-        classification = await this.llm.classifyStructured<ClassificationResult>(prompt);
+        batchResult = await this.llm.classifyStructured<BatchClassificationResult>(prompt);
         stats.llmCallsMade++;
         stats.estimatedCostUsd += LLM_COST_PER_CALL;
       } catch {
         stats.llmCallsMade++;
         stats.estimatedCostUsd += LLM_COST_PER_CALL;
         stats.errors.push({
-          sourceId: item.sourceId,
-          error: `LLM classification failed for "${item.title}"`,
+          sourceId: competitorItems[0]!.sourceId,
+          error: `Batch LLM classification failed for ${competitorName} (${competitorItems.length} articles)`,
         });
-      }
-
-      if (classification?.type === "SKIP") {
-        stats.llmSkipped++;
         continue;
       }
 
-      item.classification = classification ?? undefined;
-
-      // Resolve final URL
-      if (item.resolvedUrl) {
-        // Already resolved by article fetcher
-      } else if (classification?.sourceUrl) {
-        const llmUrlHasPath = /^https?:\/\/[^/]+\/.+/.test(classification.sourceUrl);
-        item.resolvedUrl = llmUrlHasPath
-          ? classification.sourceUrl
-          : await resolveGoogleNewsUrl(item.url);
-      } else {
-        item.resolvedUrl = await resolveGoogleNewsUrl(item.url);
+      // Validate response shape
+      if (!batchResult?.events || !Array.isArray(batchResult.events)) {
+        stats.llmSkipped += competitorItems.length;
+        continue;
       }
 
-      // Generate event fingerprint
-      const summary = classification?.summary ?? item.title;
-      item.eventFingerprint = generateEventFingerprint(classification?.eventKey, summary);
+      // Track which articles were referenced in any event
+      const referencedIndices = new Set<number>();
 
-      classified.push(item);
+      for (const event of batchResult.events) {
+        if (event.type === "SKIP") {
+          const validSkipIndices = (event.articleIndices ?? [])
+            .map(Number)
+            .filter((idx) => idx >= 0 && idx < competitorItems.length);
+          stats.llmSkipped += validSkipIndices.length;
+          for (const idx of validSkipIndices) referencedIndices.add(idx);
+          continue;
+        }
+
+        // Validate articleIndices
+        const validIndices = (event.articleIndices ?? [])
+          .map(Number)
+          .filter((idx) => idx >= 0 && idx < competitorItems.length);
+        if (validIndices.length === 0) continue;
+
+        for (const idx of validIndices) referencedIndices.add(idx);
+
+        // Pick representative article (first valid index)
+        const representativeItem = competitorItems[validIndices[0]!]!;
+
+        // Map event fields to ClassificationResult shape
+        representativeItem.classification = {
+          type: event.type,
+          summary: event.summary,
+          finmoImplication: event.finmoImplication,
+          evidenceTier: event.evidenceTier,
+          affectedClaimIds: event.affectedClaimIds ?? [],
+          sourceUrl: event.sourceUrl,
+          publishedAt: event.publishedAt,
+          eventKey: event.eventKey,
+        };
+
+        // Resolve final URL
+        if (representativeItem.resolvedUrl) {
+          // Already resolved by article fetcher
+        } else if (event.sourceUrl) {
+          const llmUrlHasPath = /^https?:\/\/[^/]+\/.+/.test(event.sourceUrl);
+          representativeItem.resolvedUrl = llmUrlHasPath
+            ? event.sourceUrl
+            : await resolveGoogleNewsUrl(representativeItem.url);
+        } else {
+          representativeItem.resolvedUrl = await resolveGoogleNewsUrl(representativeItem.url);
+        }
+
+        // Generate event fingerprint
+        representativeItem.eventFingerprint = generateEventFingerprint(
+          event.eventKey,
+          event.summary ?? representativeItem.title,
+        );
+
+        classified.push(representativeItem);
+      }
+
+      // Articles not referenced in any event are implicit SKIPs
+      for (let i = 0; i < competitorItems.length; i++) {
+        if (!referencedIndices.has(i)) {
+          stats.llmSkipped++;
+        }
+      }
     }
 
     return classified;
@@ -384,16 +453,16 @@ export class IngestionRunner {
     const claimIds = new Set(claims.map((c) => c.id));
 
     for (const item of items) {
-      // Belt-and-suspenders: final fingerprint dedup check
+      // Safety net: exact fingerprint dedup check
       if (item.eventFingerprint) {
-        const existing = await prisma.intelligenceItem.findFirst({
+        const exactMatch = await prisma.intelligenceItem.findFirst({
           where: {
             eventFingerprint: item.eventFingerprint,
             competitorId: item.competitorId,
           },
           select: { id: true },
         });
-        if (existing) {
+        if (exactMatch) {
           stats.fingerprintDedupSkipped++;
           continue;
         }
@@ -506,6 +575,9 @@ export class IngestionRunner {
       return;
     }
 
+    // Fetch existing event keys for this competitor (cross-run dedup)
+    const stateExistingKeys = await this.getExistingEventKeys([source.competitorId]);
+
     for (const change of changes) {
       change.competitorId = source.competitorId;
       change.sourceId = source.id;
@@ -521,6 +593,7 @@ export class IngestionRunner {
           claims,
           sourceCategory: "STATE",
           isFirstRun,
+          existingEventKeys: stateExistingKeys.get(source.competitorId),
         });
         classification =
           await this.llm.classifyStructured<ClassificationResult>(prompt);
@@ -564,12 +637,31 @@ export class IngestionRunner {
         summary,
       );
 
-      // Fingerprint dedup for state sources
+      // Fingerprint dedup for state sources (exact + fuzzy)
       const existingByFingerprint = await prisma.intelligenceItem.findFirst({
         where: { eventFingerprint, competitorId: source.competitorId },
         select: { id: true },
       });
       if (existingByFingerprint) {
+        stats.fingerprintDedupSkipped++;
+        continue;
+      }
+
+      const recentStateFingerprints = await prisma.intelligenceItem.findMany({
+        where: {
+          competitorId: source.competitorId,
+          eventFingerprint: { not: null },
+          detectedAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+        },
+        select: { eventFingerprint: true },
+        distinct: ["eventFingerprint"],
+      });
+      const stateFuzzyMatch = recentStateFingerprints.some(
+        (existing) =>
+          existing.eventFingerprint &&
+          fuzzyFingerprintMatch(eventFingerprint, existing.eventFingerprint),
+      );
+      if (stateFuzzyMatch) {
         stats.fingerprintDedupSkipped++;
         continue;
       }
@@ -624,6 +716,39 @@ export class IngestionRunner {
         },
       });
     }
+  }
+
+  // ─── Existing event key helpers ──────────────────────────────────
+
+  /** Fetch recent event fingerprints + summaries for LLM context injection. */
+  private async getExistingEventKeys(
+    competitorIds: string[],
+  ): Promise<Map<string, Array<{ eventKey: string; summary: string }>>> {
+    if (competitorIds.length === 0) return new Map();
+
+    const recentItems = await prisma.intelligenceItem.findMany({
+      where: {
+        competitorId: { in: competitorIds },
+        eventFingerprint: { not: null },
+        detectedAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
+      },
+      select: {
+        competitorId: true,
+        eventFingerprint: true,
+        summary: true,
+      },
+      distinct: ["eventFingerprint"],
+      orderBy: { detectedAt: "desc" },
+    });
+
+    const map = new Map<string, Array<{ eventKey: string; summary: string }>>();
+    for (const item of recentItems) {
+      if (!item.eventFingerprint) continue;
+      const list = map.get(item.competitorId) ?? [];
+      list.push({ eventKey: item.eventFingerprint, summary: item.summary });
+      map.set(item.competitorId, list);
+    }
+    return map;
   }
 
   // ─── Helpers ──────────────────────────────────────────────────────

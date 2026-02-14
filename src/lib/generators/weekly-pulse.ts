@@ -43,7 +43,7 @@ export async function generateWeeklyPulse(
 
   while (attempts < OUTPUT_LIMITS.MAX_REGENERATION_ATTEMPTS) {
     attempts++;
-    content = await llm.generateStructured<WeeklyPulseContent>(prompt, {}, { fast: true });
+    content = await llm.generateStructured<WeeklyPulseContent>(prompt, {});
 
     const validation = validateWeeklyPulse(
       content,

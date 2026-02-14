@@ -43,7 +43,7 @@ export async function generateMonthlyPulse(
 
   while (attempts < OUTPUT_LIMITS.MAX_REGENERATION_ATTEMPTS) {
     attempts++;
-    content = await llm.generateStructured<MonthlyPulseContent>(prompt, {}, { fast: true });
+    content = await llm.generateStructured<MonthlyPulseContent>(prompt, {});
 
     const validation = validateMonthlyPulse(
       content,

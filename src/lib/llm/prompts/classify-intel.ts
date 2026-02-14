@@ -3,6 +3,7 @@ import type { SourceCategory } from "@/lib/config/thresholds";
 import { FINMO_STRATEGIC_CONTEXT, getCompetitorProfile, CLASSIFICATION_RUBRIC } from "@/lib/llm/context";
 
 const MAX_CONTENT_LENGTH = 8000;
+const BATCH_MAX_CONTENT_LENGTH = 3000;
 
 interface ClassifyIntelPromptContext {
   competitorName: string;
@@ -13,6 +14,7 @@ interface ClassifyIntelPromptContext {
   claims: PositioningClaim[];
   sourceCategory: SourceCategory;
   isFirstRun: boolean;
+  existingEventKeys?: Array<{ eventKey: string; summary: string }>;
 }
 
 export interface ClassificationResult {
@@ -25,6 +27,137 @@ export interface ClassificationResult {
   publishedAt: string;
   eventKey: string;
 }
+
+// ---------------------------------------------------------------------------
+// Batch classification (EVENT sources — multiple articles per competitor)
+// ---------------------------------------------------------------------------
+
+export interface BatchClassificationEvent {
+  articleIndices: number[];
+  eventKey: string;
+  type: string;
+  summary: string;
+  finmoImplication: string;
+  evidenceTier: string;
+  affectedClaimIds: string[];
+  sourceUrl: string;
+  publishedAt: string;
+}
+
+export interface BatchClassificationResult {
+  events: BatchClassificationEvent[];
+}
+
+interface BatchClassifyPromptContext {
+  competitorName: string;
+  articles: Array<{
+    index: number;
+    title: string;
+    content: string;
+    sourceUrl: string;
+    sourceType: string;
+    changeType: string;
+    pubDate?: string;
+  }>;
+  claims: PositioningClaim[];
+  existingEventKeys?: Array<{ eventKey: string; summary: string }>;
+}
+
+export function buildBatchClassifyPrompt(ctx: BatchClassifyPromptContext): string {
+  const claimsList = ctx.claims
+    .map((c) => `- [${c.id}] "${c.claimText}"`)
+    .join("\n");
+
+  const typeOptions = '"PRODUCT_CHANGE" | "PRICING_CHANGE" | "HIRING_SIGNAL" | "PARTNERSHIP" | "REVIEW" | "PRESS" | "OUTAGE" | "MESSAGING_SHIFT" | "SEO_CHANGE" | "REGULATORY"';
+
+  const competitorProfile = getCompetitorProfile(ctx.competitorName);
+
+  const articlesBlock = ctx.articles.map((a) => {
+    const content = a.content.length > BATCH_MAX_CONTENT_LENGTH
+      ? a.content.slice(0, BATCH_MAX_CONTENT_LENGTH) + "\n[...truncated]"
+      : a.content;
+    return `--- ARTICLE [${a.index}] ---
+Title: ${a.title}
+Source Type: ${a.sourceType} | Source URL: ${a.sourceUrl} | Change Type: ${a.changeType}${a.pubDate ? ` | Published: ${a.pubDate}` : ""}
+${content}`;
+  }).join("\n\n");
+
+  const existingKeysBlock = ctx.existingEventKeys && ctx.existingEventKeys.length > 0
+    ? `\nEXISTING EVENT KEYS FOR ${ctx.competitorName.toUpperCase()}:
+If any articles describe the same real-world event as one listed below, you MUST reuse that EXACT eventKey. Do NOT create a new key for an already-tracked event. If ALL articles for an existing event are just re-coverage of something already tracked, omit them (omission = SKIP).
+${ctx.existingEventKeys.map((e) => `- "${e.eventKey}" — ${e.summary}`).join("\n")}
+`
+    : "";
+
+  return `You are Finmo's competitive intelligence classifier.
+
+${FINMO_STRATEGIC_CONTEXT}
+
+COMPETITOR BEING ANALYZED:
+${competitorProfile}
+
+You are classifying ${ctx.articles.length} article(s) about ${ctx.competitorName}.
+Each article is from an EVENT source (RSS feed, LinkedIn). Your job is to:
+1. Group articles about the SAME real-world event together
+2. Classify each distinct event
+3. Omit articles that are not competitively noteworthy (omission = SKIP)
+
+ARTICLES:
+${articlesBlock}
+
+FINMO'S POSITIONING CLAIMS:
+${claimsList}
+
+${CLASSIFICATION_RUBRIC}
+${existingKeysBlock}
+EVENTKEY FORMAT:
+- Lowercase, hyphenated, no special chars. Aim for 3-6 segments.
+- Structure: {company}-{what-happened}. Do NOT include dates, months, or years.
+- Normalize verbs to domain nouns: "announces/appoints/adds/names" → "hires"; "launches/releases/unveils" → "launch"; "raises/secures" → "funding"; "acquires/buys" → "acquisition"
+- Focus on WHAT ACTUALLY HAPPENED, not how the headline phrases it.
+- Examples (different articles about the SAME event must produce the SAME key):
+  "Nium Announces Three New C-Suite Hires" → "nium-c-suite-hires"
+  "Nium Appointed Three C-Suite Executives (CTO, CMO, CRCO)" → "nium-c-suite-hires"
+  "Kyriba Launches AI Cash Forecasting Module" → "kyriba-ai-cash-forecasting-launch"
+  "Airwallex raises $300M in Series F" → "airwallex-series-f-funding"
+  "Ripple Completes Acquisition of GTreasury" → "ripple-gtreasury-acquisition"
+
+TASK: Classify these articles. Group articles about the SAME real-world event into a single event entry.
+Respond with ONLY valid JSON matching this schema:
+{
+  "events": [
+    {
+      "articleIndices": number[] (indices of articles describing this event — e.g. [0, 2, 3]),
+      "eventKey": string (normalized event key — IDENTICAL across runs for same event),
+      "type": one of ${typeOptions},
+      "summary": string (one clear factual sentence describing what happened),
+      "finmoImplication": string (one sentence on why this matters to Finmo's positioning),
+      "evidenceTier": "CONFIRMED" | "INFERRED" | "UNKNOWN",
+      "affectedClaimIds": string[] (IDs of positioning claims affected, empty array if none),
+      "sourceUrl": string (the best specific article URL from the grouped articles),
+      "publishedAt": string (ISO 8601 YYYY-MM-DD or "" if unknown)
+    }
+  ]
+}
+
+RULES:
+- If multiple articles describe the SAME real-world event, merge them into ONE event entry with all their articleIndices. Pick the best sourceUrl and most complete summary.
+- Each article should appear in at most ONE event's articleIndices.
+- Articles that are boilerplate, not noteworthy, or contain no competitive intelligence should NOT appear in any event — omission means SKIP.
+- If ALL articles are noise, return {"events": []}.
+- Pick the single most accurate type per event.
+- Summary should be factual and specific (e.g. "Kyriba adds AI cash forecasting to treasury suite")
+- Finmo implication should focus on competitive impact, not restate the summary
+- Be conservative with evidence tier — use CONFIRMED only when the source directly states it
+- Only include claim IDs that are genuinely affected by this signal
+- For sourceUrl: prefer specific article/announcement links over generic landing pages
+- For publishedAt: look for dates near headlines or article metadata — do NOT guess or invent dates
+- eventKey must be IDENTICAL for articles about the same real-world event, regardless of which publisher wrote it`;
+}
+
+// ---------------------------------------------------------------------------
+// Single-article classification (STATE sources + legacy)
+// ---------------------------------------------------------------------------
 
 export function buildClassifyIntelPrompt(ctx: ClassifyIntelPromptContext): string {
   const truncated = ctx.rawContent.length > MAX_CONTENT_LENGTH
@@ -42,6 +175,13 @@ export function buildClassifyIntelPrompt(ctx: ClassifyIntelPromptContext): strin
     : buildStateContext(ctx);
 
   const competitorProfile = getCompetitorProfile(ctx.competitorName);
+
+  const existingKeysBlock = ctx.existingEventKeys && ctx.existingEventKeys.length > 0
+    ? `\nEXISTING EVENT KEYS FOR ${ctx.competitorName.toUpperCase()}:
+If this article describes the same real-world event as one listed below, you MUST reuse that EXACT eventKey. Do NOT create a new key for an already-tracked event.
+${ctx.existingEventKeys.map((e) => `- "${e.eventKey}" — ${e.summary}`).join("\n")}
+`
+    : "";
 
   return `You are Finmo's competitive intelligence classifier.
 
@@ -89,7 +229,7 @@ EVENTKEY FORMAT:
   "Kyriba Launches AI Cash Forecasting Module" → "kyriba-ai-cash-forecasting-launch"
   "Airwallex raises $300M in Series F" → "airwallex-series-f-funding"
   "Ripple Completes Acquisition of GTreasury" → "ripple-gtreasury-acquisition"
-
+${existingKeysBlock}
 RULES:
 - Pick the single most accurate type
 - Use "SKIP" if this content is not competitively noteworthy, is boilerplate, or contains no actionable intelligence

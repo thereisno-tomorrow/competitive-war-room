@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateEventFingerprint } from "../event-fingerprint";
+import { generateEventFingerprint, fuzzyFingerprintMatch } from "../event-fingerprint";
 
 describe("generateEventFingerprint", () => {
   // -----------------------------------------------------------------------
@@ -112,5 +112,72 @@ describe("generateEventFingerprint", () => {
     const fp = generateEventFingerprint(undefined, "the a an is was");
     expect(fp).toHaveLength(16);
     expect(fp).toMatch(/^[a-f0-9]{16}$/);
+  });
+});
+
+describe("fuzzyFingerprintMatch", () => {
+  it("should match fingerprints differing by one action segment", () => {
+    expect(fuzzyFingerprintMatch(
+      "ripple-gtreasury-acquisition",
+      "ripple-gtreasury-partnership",
+    )).toBe(true);
+  });
+
+  it("should match exact duplicate fingerprints", () => {
+    expect(fuzzyFingerprintMatch(
+      "kyriba-ai-cash-forecasting-launch",
+      "kyriba-ai-cash-forecasting-launch",
+    )).toBe(true);
+  });
+
+  it("should not match completely different events", () => {
+    expect(fuzzyFingerprintMatch(
+      "ripple-gtreasury-acquisition",
+      "nium-c-suite-hires",
+    )).toBe(false);
+  });
+
+  it("should not match when only 1 segment shared", () => {
+    expect(fuzzyFingerprintMatch(
+      "ripple-treasury-launch",
+      "ripple-hiring-expansion",
+    )).toBe(false);
+  });
+
+  it("should skip legacy hex fingerprints (no hyphens)", () => {
+    expect(fuzzyFingerprintMatch(
+      "a1b2c3d4e5f6g7h8",
+      "ripple-gtreasury-acquisition",
+    )).toBe(false);
+  });
+
+  it("should not match when both are legacy hex fingerprints", () => {
+    expect(fuzzyFingerprintMatch(
+      "a1b2c3d4e5f6g7h8",
+      "f9e8d7c6b5a4a3a2",
+    )).toBe(false);
+  });
+
+  it("should match 4-segment keys differing by one segment", () => {
+    expect(fuzzyFingerprintMatch(
+      "airwallex-austrac-regulatory-scrutiny",
+      "airwallex-austrac-regulatory-investigation",
+    )).toBe(true);
+  });
+
+  it("should not match keys differing by 2+ segments", () => {
+    expect(fuzzyFingerprintMatch(
+      "nium-card-issuance-launch",
+      "nium-treasury-platform-expansion",
+    )).toBe(false);
+  });
+
+  it("should respect custom options", () => {
+    // With relaxed maxDiff, allow 2 different segments
+    expect(fuzzyFingerprintMatch(
+      "ripple-treasury-platform-launch",
+      "ripple-gtreasury-acquisition",
+      { minSharedSegments: 1, maxDifferentSegments: 3 },
+    )).toBe(true);
   });
 });

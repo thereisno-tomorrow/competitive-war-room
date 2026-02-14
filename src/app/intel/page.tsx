@@ -99,6 +99,21 @@ function formatDetectedAt(iso: string): string {
 }
 
 // ---------------------------------------------------------------------------
+// Helper: relative time (e.g. "2 hours ago")
+// ---------------------------------------------------------------------------
+
+function formatRelativeTime(iso: string): string {
+  const diffMs = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(diffMs / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
+}
+
+// ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
@@ -367,9 +382,16 @@ export default function IntelFeedPage() {
     <div className="max-w-4xl space-y-6">
       {/* Page header */}
       <header>
-        <h1 className="text-2xl font-semibold text-zinc-900 tracking-tight">
-          Intel Feed
-        </h1>
+        <div className="flex items-baseline justify-between">
+          <h1 className="text-2xl font-semibold text-zinc-900 tracking-tight">
+            Intel Feed
+          </h1>
+          {data?.lastUpdated && (
+            <span className="text-xs text-zinc-400">
+              Last updated {formatRelativeTime(data.lastUpdated)}
+            </span>
+          )}
+        </div>
         <p className="mt-1 text-sm text-zinc-400">
           Raw intelligence stream. Every signal, chronologically.
         </p>

@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
     where.detectedAt = detectedAt;
   }
 
-  const [items, total] = await Promise.all([
+  const [items, total, lastSource] = await Promise.all([
     prisma.intelligenceItem.findMany({
       where,
       include: { competitor: true },
@@ -51,6 +51,11 @@ export async function GET(request: NextRequest) {
       skip: offset,
     }),
     prisma.intelligenceItem.count({ where }),
+    prisma.dataSource.findFirst({
+      where: { lastChecked: { not: null } },
+      orderBy: { lastChecked: "desc" },
+      select: { lastChecked: true },
+    }),
   ]);
 
   return NextResponse.json({
@@ -68,5 +73,6 @@ export async function GET(request: NextRequest) {
     total,
     limit,
     offset,
+    lastUpdated: lastSource?.lastChecked?.toISOString() ?? null,
   });
 }

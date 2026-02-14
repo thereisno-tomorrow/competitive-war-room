@@ -12,30 +12,30 @@ interface AlertEvalResult {
   reasons: string[];
 }
 
-const ALERT_INTEL_TYPES: IntelType[] = ["PRICING_CHANGE", "OUTAGE"];
+/** Always alert regardless of claims */
+const STANDALONE_ALERT_TYPES: IntelType[] = ["PRICING_CHANGE", "OUTAGE"];
+
+/** Only alert when a positioning claim is also affected */
+const CLAIM_SENSITIVE_TYPES: IntelType[] = ["PRODUCT_CHANGE", "MESSAGING_SHIFT"];
 
 export function evaluateAlertThreshold(input: AlertEvalInput): AlertEvalResult {
   const reasons: string[] = [];
 
-  if (input.competitorTier === "TIER_1") {
-    reasons.push("Tier 1 competitor involved");
-  }
-
-  if (ALERT_INTEL_TYPES.includes(input.intelType)) {
+  // Standalone triggers — always alert
+  if (STANDALONE_ALERT_TYPES.includes(input.intelType)) {
     if (input.intelType === "PRICING_CHANGE") reasons.push("Pricing change detected");
     if (input.intelType === "OUTAGE") reasons.push("Outage detected");
   }
 
-  if (input.affectsPositioningClaims) {
-    reasons.push("Positioning claim affected");
+  // Compound trigger — high-impact type + positioning claim affected
+  if (input.affectsPositioningClaims && CLAIM_SENSITIVE_TYPES.includes(input.intelType)) {
+    reasons.push("Positioning claim affected by " + input.intelType.toLowerCase().replace("_", " "));
   }
 
+  // Keyword trigger — existential category threat
   if (/treasury\s+operating\s+system/i.test(input.content)) {
     reasons.push("'Treasury Operating System' language detected");
   }
 
-  return {
-    shouldAlert: reasons.length > 0,
-    reasons,
-  };
+  return { shouldAlert: reasons.length > 0, reasons };
 }
