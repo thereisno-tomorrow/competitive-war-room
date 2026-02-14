@@ -13,7 +13,8 @@
  *   3. Fallback — normalized Google News URL (browser JS redirect only).
  */
 
-import { JSDOM } from "jsdom";
+// Dynamic import to avoid ESM/CommonJS issues on Vercel
+// import { JSDOM } from "jsdom";
 
 const GNEWS_RSS_PATTERN = /^https?:\/\/news\.google\.com\/rss\/articles\//i;
 const GNEWS_ARTICLE_PATTERN =
@@ -151,7 +152,7 @@ async function resolveViaBatchexecute(
   if (!pageResponse.ok) return null;
 
   const html = await pageResponse.text();
-  const { signature, timestamp } = extractDecodingParams(html);
+  const { signature, timestamp } = await extractDecodingParams(html);
   if (!signature || !timestamp) return null;
 
   // Step 2: POST to batchexecute RPC
@@ -192,10 +193,10 @@ async function resolveViaBatchexecute(
  * Extract `data-n-a-sg` (signature) and `data-n-a-ts` (timestamp) from
  * the Google News article page HTML.
  */
-function extractDecodingParams(html: string): {
+async function extractDecodingParams(html: string): Promise<{
   signature: string | null;
   timestamp: string | null;
-} {
+}> {
   // Use regex first (faster than full DOM parse)
   const sigMatch = html.match(/data-n-a-sg="([^"]+)"/);
   const tsMatch = html.match(/data-n-a-ts="([^"]+)"/);
@@ -206,6 +207,7 @@ function extractDecodingParams(html: string): {
 
   // Fallback: parse with JSDOM for robustness
   try {
+    const { JSDOM } = await import("jsdom");
     const dom = new JSDOM(html);
     const el = dom.window.document.querySelector("c-wiz > div[jscontroller]");
     if (!el) return { signature: null, timestamp: null };
